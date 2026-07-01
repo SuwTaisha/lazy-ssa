@@ -1,104 +1,165 @@
-import { Head, useForm } from '@inertiajs/react';
-import { LoaderCircle } from 'lucide-react';
-import { FormEventHandler } from 'react';
+import { Link, useForm } from "@inertiajs/react";
+import { FormEventHandler } from "react";
 
-import InputError from '@/components/input-error';
-import TextLink from '@/components/text-link';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import AuthLayout from '@/layouts/auth-layout';
+// ── Dữ liệu tĩnh chỉ để minh hoạ preview lịch tuần bên trái ──────
+const PREVIEW_DAYS = [
+  { day: "T2", subject: "PRF192", mode: "🏫" },
+  { day: "T3", subject: "MAE101", mode: "🌐" },
+  { day: "T4", subject: "CEA201", mode: "🏫" },
+  { day: "T5", subject: "CSI106", mode: "🌐" },
+  { day: "T6", subject: "SSA101", mode: "🏫" },
+];
 
-interface LoginForm {
-    email: string;
-    password: string;
-    remember: boolean;
-}
+export default function Login() {
+  const { data, setData, post, processing, errors } = useForm({
+    email: "",
+    password: "",
+    remember: false,
+  });
 
-interface LoginProps {
-    status?: string;
-    canResetPassword: boolean;
-}
+  const submit: FormEventHandler = (e) => {
+    e.preventDefault();
+    post("/login");
+  };
 
-export default function Login({ status, canResetPassword }: LoginProps) {
-    const { data, setData, post, processing, errors, reset } = useForm<LoginForm>({
-        email: '',
-        password: '',
-        remember: false,
-    });
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#06061a] px-4 py-10 font-['Outfit',_sans-serif] text-[#e2e2f0]">
+      {/* Nền chấm */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-60"
+        style={{
+          backgroundImage: "radial-gradient(#ffffff08 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
 
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('login'), {
-            onFinish: () => reset('password'),
-        });
-    };
+      <div className="relative z-10 grid w-full max-w-4xl grid-cols-1 overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d22] shadow-2xl md:grid-cols-2">
+        {/* ── Panel trái: thương hiệu + preview lịch tuần ───────── */}
+        <div className="relative hidden flex-col justify-between border-r border-white/10 bg-gradient-to-b from-[#FF6B3512] to-transparent p-9 md:flex">
+          <div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-black tracking-tight text-[#FF6B35]">FPT</span>
+              <span className="text-2xl font-black tracking-tight text-white">TIME</span>
+            </div>
+            <div className="mt-1 text-[9px] uppercase tracking-[3px] text-white/30">
+              Management Toolkit
+            </div>
+          </div>
 
-    return (
-        <AuthLayout title="Log in to your account" description="Enter your email and password below to log in">
-            <Head title="Log in" />
-
-            <form className="flex flex-col gap-6" onSubmit={submit}>
-                <div className="grid gap-6">
-                    <div className="grid gap-2">
-                        <Label htmlFor="email">Email address</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            required
-                            autoFocus
-                            tabIndex={1}
-                            autoComplete="email"
-                            value={data.email}
-                            onChange={(e) => setData('email', e.target.value)}
-                            placeholder="email@example.com"
-                        />
-                        <InputError message={errors.email} />
-                    </div>
-
-                    <div className="grid gap-2">
-                        <div className="flex items-center">
-                            <Label htmlFor="password">Password</Label>
-                            {canResetPassword && (
-                                <TextLink href={route('password.request')} className="ml-auto text-sm" tabIndex={5}>
-                                    Forgot password?
-                                </TextLink>
-                            )}
-                        </div>
-                        <Input
-                            id="password"
-                            type="password"
-                            required
-                            tabIndex={2}
-                            autoComplete="current-password"
-                            value={data.password}
-                            onChange={(e) => setData('password', e.target.value)}
-                            placeholder="Password"
-                        />
-                        <InputError message={errors.password} />
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                        <Checkbox id="remember" name="remember" tabIndex={3} />
-                        <Label htmlFor="remember">Remember me</Label>
-                    </div>
-
-                    <Button type="submit" className="mt-4 w-full" tabIndex={4} disabled={processing}>
-                        {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                        Log in
-                    </Button>
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-white/40">
+                Tuần 3 · Lịch học
+              </span>
+              <span className="rounded-full bg-[#FF6B3518] px-2.5 py-0.5 text-[10px] font-bold text-[#FF6B35]">
+                Hiện tại
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {PREVIEW_DAYS.map((d) => (
+                <div
+                  key={d.day}
+                  className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2"
+                >
+                  <span className="w-6 text-[11px] font-bold text-white/40">{d.day}</span>
+                  <span className="flex-1 text-[12px] font-semibold text-[#e2e2f0]">
+                    {d.subject}
+                  </span>
+                  <span className="text-[11px]">{d.mode}</span>
                 </div>
+              ))}
+            </div>
+          </div>
 
-                <div className="text-muted-foreground text-center text-sm">
-                    Don't have an account?{' '}
-                    <TextLink href={route('register')} tabIndex={5}>
-                        Sign up
-                    </TextLink>
-                </div>
-            </form>
+          <p className="text-[11px] leading-relaxed text-white/30">
+            Đăng nhập để đồng bộ lịch học, deadline và ghi chú của bạn.
+          </p>
+        </div>
 
-            {status && <div className="mb-4 text-center text-sm font-medium text-green-600">{status}</div>}
-        </AuthLayout>
-    );
+        {/* ── Panel phải: form đăng nhập ─────────────────────────── */}
+        <div className="flex flex-col justify-center p-8 sm:p-10">
+          <div className="mb-1 flex items-baseline gap-1 md:hidden">
+            <span className="text-xl font-black tracking-tight text-[#FF6B35]">FPT</span>
+            <span className="text-xl font-black tracking-tight text-white">TIME</span>
+          </div>
+
+          <h1 className="mt-2 text-xl font-extrabold text-white">Đăng nhập</h1>
+          <p className="mt-1 text-[12px] text-white/40">
+            Nhập thông tin tài khoản để tiếp tục
+          </p>
+
+          <form onSubmit={submit} className="mt-7 flex flex-col gap-4">
+            <div>
+              <label htmlFor="email" className="mb-1.5 block text-[11px] font-semibold text-white/50">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={data.email}
+                onChange={(e) => setData("email", e.target.value)}
+                autoComplete="username"
+                placeholder="ban@fpt.edu.vn"
+                className="w-full rounded-lg border border-white/10 bg-[#1a1a32] px-3.5 py-2.5 text-[13px] text-[#e2e2f0] outline-none placeholder:text-white/20 focus:border-[#FF6B3560] focus:ring-1 focus:ring-[#FF6B3540]"
+              />
+              {errors.email && (
+                <p className="mt-1.5 text-[11px] text-red-400">{errors.email}</p>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="password" className="block text-[11px] font-semibold text-white/50">
+                  Mật khẩu
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-[11px] font-semibold text-[#FF6B35] hover:text-[#ff8255]"
+                >
+                  Quên mật khẩu?
+                </Link>
+              </div>
+              <input
+                id="password"
+                type="password"
+                value={data.password}
+                onChange={(e) => setData("password", e.target.value)}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                className="w-full rounded-lg border border-white/10 bg-[#1a1a32] px-3.5 py-2.5 text-[13px] text-[#e2e2f0] outline-none placeholder:text-white/20 focus:border-[#FF6B3560] focus:ring-1 focus:ring-[#FF6B3540]"
+              />
+              {errors.password && (
+                <p className="mt-1.5 text-[11px] text-red-400">{errors.password}</p>
+              )}
+            </div>
+
+            <label className="flex select-none items-center gap-2 text-[12px] text-white/50">
+              <input
+                type="checkbox"
+                checked={data.remember}
+                onChange={(e) => setData("remember", e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-white/20 bg-[#1a1a32] accent-[#FF6B35]"
+              />
+              Ghi nhớ đăng nhập
+            </label>
+
+            <button
+              type="submit"
+              disabled={processing}
+              className="mt-1 flex items-center justify-center gap-2 rounded-lg bg-[#FF6B35] px-4 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[#ff7d4d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {processing ? "Đang đăng nhập..." : "Đăng nhập"}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-[12px] text-white/40">
+            Chưa có tài khoản?{" "}
+            <Link href="/register" className="font-semibold text-[#FF6B35] hover:text-[#ff8255]">
+              Đăng ký
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }

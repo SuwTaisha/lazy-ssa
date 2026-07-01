@@ -1,5 +1,7 @@
 'use client';
 
+
+import { Link } from '@inertiajs/react';
 import React, { CSSProperties, useEffect, useMemo, useState } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -250,13 +252,10 @@ export default function Home() {
     // ── Render ────────────────────────────────────────────────────
     return (
         <div style={css.root}>
-            {/* Fonts & global reset (scoped to this page via a plain style tag) */}
             <style>{globalCss}</style>
 
-            {/* Background dots */}
             <div style={css.bgDots} />
 
-            {/* ── Header ── */}
             <Header
                 currentWeek={currentWeek}
                 pendingCount={pendingTasks.length}
@@ -347,6 +346,9 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
 
             {/* Right side */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Link href='/login' className="flex items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-500 transition-colors hover:bg-orange-500/20 active:scale-95">
+                    Đăng nhập
+                </Link>
                 {/* Bell button */}
                 <div style={{ position: 'relative' }}>
                     <button
