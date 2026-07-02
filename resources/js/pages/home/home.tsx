@@ -1,7 +1,6 @@
 'use client';
 
-
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import React, { CSSProperties, useEffect, useMemo, useState } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -13,6 +12,17 @@ interface Subject {
     name: string;
     full: string;
     color: string;
+}
+
+interface PageProps {
+    auth: {
+        user: {
+            id: number;
+            name: string;
+            email: string;
+        } | null;
+    };
+    [key: string]: unknown; // để không lỗi khi Inertia có thêm props khác (errors, ziggy...)
 }
 
 type Schedule = Record<number, string[]>; // day (1-5) -> subject ids
@@ -164,6 +174,8 @@ export default function Home() {
         const d = getMondayOf(new Date().toISOString().split('T')[0]);
         return d.toISOString().split('T')[0];
     });
+    const { auth } = usePage<PageProps>().props;
+    const user = auth.user;
 
     const [subjects, setSubjects] = useState<Subject[]>(() => load('fpt3_subjects', DEFAULT_SUBJECTS));
     const [schedule, setSchedule] = useState<Schedule>(() => load('fpt3_schedule', DEFAULT_SCHEDULE));
@@ -264,6 +276,7 @@ export default function Home() {
                 bellOpen={bellOpen}
                 setBellOpen={setBellOpen}
                 pendingTasks={pendingTasks}
+                user={user}
             />
 
             {/* ── Bottom Nav ── */}
@@ -328,7 +341,7 @@ interface HeaderProps {
     pendingTasks: Task[];
 }
 
-function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pendingTasks }: HeaderProps) {
+function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pendingTasks, user }) {
     const isExam = currentWeek > STUDY_WEEKS;
     const label = isExam ? `THI ${currentWeek - STUDY_WEEKS}` : `W${currentWeek}`;
     const sublabel = isExam ? 'TUẦN THI' : 'TUẦN HỌC';
@@ -346,9 +359,18 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
 
             {/* Right side */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Link href='/login' className="flex items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-500 transition-colors hover:bg-orange-500/20 active:scale-95">
-                    Đăng nhập
-                </Link>
+                {user ? (
+                    <button className="flex items-center gap-1.5 rounded-lg border border-[#34D39930] bg-[#34D39912] px-3 py-1.5 text-xs font-bold text-[#34D399]">
+                        👤 {user.name}
+                    </button>
+                ) : (
+                    <Link
+                        href="/login"
+                        className="flex items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-500 hover:bg-orange-500/20 active:scale-95"
+                    >
+                        🔐 Đăng nhập
+                    </Link>
+                )}
                 {/* Bell button */}
                 <div style={{ position: 'relative' }}>
                     <button
