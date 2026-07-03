@@ -1,43 +1,40 @@
 'use client';
 
-import { Link, usePage } from '@inertiajs/react';
+import type { FormDataConvertible } from '@inertiajs/core';
+import { Link, router, usePage } from '@inertiajs/react';
 import React, { CSSProperties, useEffect, useMemo, useState } from 'react';
+
+// Inertia's router.put/post yêu cầu payload thoả FormDataConvertible (index signature).
+// Các type của app (Subject[], Schedule, OnlineDays, ExamData) đã có shape cụ thể nên
+// TypeScript không tự suy ra được — ép kiểu tường minh ở nơi gọi thay vì nới lỏng interface.
+function asFormData<T extends Record<string, unknown>>(data: T): Record<string, FormDataConvertible> {
+    return data as unknown as Record<string, FormDataConvertible>;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════
 
 interface Subject {
-    id: string;
+    id: string; // = subjects.code trong DB, không phải PK số
     name: string;
     full: string;
     color: string;
 }
 
-interface PageProps {
-    auth: {
-        user: {
-            id: number;
-            name: string;
-            email: string;
-        } | null;
-    };
-    [key: string]: unknown; // để không lỗi khi Inertia có thêm props khác (errors, ziggy...)
-}
-
-type Schedule = Record<number, string[]>; // day (1-5) -> subject ids
+type Schedule = Record<number, string[]>; // day (1-5) -> subject codes
 type OnlineDays = Record<number, number[]>; // week -> days online
 
 interface Task {
     id: number;
-    subject: string;
+    subject: string; // subject code, "" nếu không gắn môn
     text: string;
     deadline: string;
     done: boolean;
     createdAt: string;
 }
 
-type Notes = Record<string, string>; // subjectId -> note text
+type Notes = Record<string, string>; // subjectCode -> note text
 
 interface ExamEntry {
     date?: string;
@@ -45,10 +42,26 @@ interface ExamEntry {
     room?: string;
     type?: string;
 }
-type ExamData = Record<string, ExamEntry>; // `w{week}_{subjectId}` -> entry
+type ExamData = Record<string, ExamEntry>; // `w{week}_{code}` -> entry
 
 type ModalState = string | null;
 type TabId = 'schedule' | 'tasks' | 'notes' | 'settings';
+
+interface PageProps {
+    auth: {
+        user: { id: number; name: string; email: string } | null;
+    };
+    semesterId?: number;
+    semStart: string;
+    subjects: Subject[];
+    schedule: Schedule;
+    onlineDays: OnlineDays;
+    tasks: Task[];
+    notes: Notes;
+    examData: ExamData;
+    isDemo: boolean;
+    [key: string]: unknown;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS & HELPERS
@@ -75,63 +88,25 @@ const PRESET_COLORS = [
 const DAY_NAMES: Record<number, string> = { 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6' };
 const DAY_SHORT: Record<number, string> = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6' };
 const STUDY_WEEKS = 7;
-const TOTAL_WEEKS = 9; // 7 study + 2 exam
-
-const DEFAULT_SUBJECTS: Subject[] = [
-    { id: 'SSA101', name: 'SSA101', full: 'Soft Skills & Academic', color: '#FF6B35' },
-    { id: 'CSI106', name: 'CSI106', full: 'Computer Science Intro', color: '#00C6FF' },
-    { id: 'PRF192', name: 'PRF192', full: 'Programming Fundamentals', color: '#A78BFA' },
-    { id: 'MAE101', name: 'MAE101', full: 'Mathematics for Engineering', color: '#34D399' },
-    { id: 'CEA201', name: 'CEA201', full: 'Computer Engineering Architecture', color: '#FBBF24' },
-];
-
-const DEFAULT_SCHEDULE: Schedule = {
-    1: ['SSA101', 'CSI106'],
-    2: ['PRF192', 'MAE101'],
-    3: ['CEA201', 'SSA101'],
-    4: ['MAE101', 'PRF192'],
-    5: ['CSI106', 'CEA201'],
-};
-
-function buildDefaultOnline(): OnlineDays {
-    const map: OnlineDays = {};
-    for (let w = 1; w <= STUDY_WEEKS; w++) {
-        if (w <= 2) map[w] = [];
-        else if (w % 2 === 1) map[w] = [2, 4];
-        else map[w] = [1, 3, 5];
-    }
-    return map;
-}
-
-// ── Date helpers ─────────────────────────────────────────────────
-function getMondayOf(dateStr: string): Date {
-    const d = new Date(dateStr);
-    const day = d.getDay();
-    d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-    return d;
-}
+const TOTAL_WEEKS = 9;
 
 function getWeekMonday(semStart: string, weekNum: number): Date {
     const d = new Date(semStart);
     d.setDate(d.getDate() + (weekNum - 1) * 7);
     return d;
 }
-
 function getDayDate(monday: Date, dow: number): Date {
     const d = new Date(monday);
     d.setDate(d.getDate() + dow - 1);
     return d;
 }
-
 function fmtDMY(d: Date): string {
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
-
 function isToday(d: Date): boolean {
     const n = new Date();
     return d.getDate() === n.getDate() && d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
 }
-
 function fmtCountdown(ms: number): string {
     if (ms <= 0) return 'Đã quá hạn';
     const totalSec = Math.floor(ms / 1000);
@@ -144,66 +119,21 @@ function fmtCountdown(ms: number): string {
     return `${m}p ${s}s`;
 }
 
-// ── LocalStorage helpers ─────────────────────────────────────────
-function load<T>(key: string, fallback: T): T {
-    if (typeof window === 'undefined') return fallback;
-    try {
-        const v = localStorage.getItem(key);
-        return v ? (JSON.parse(v) as T) : fallback;
-    } catch {
-        return fallback;
-    }
-}
-function save<T>(key: string, value: T): void {
-    if (typeof window === 'undefined') return;
-    try {
-        localStorage.setItem(key, JSON.stringify(value));
-    } catch {}
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // ROOT COMPONENT
 // ═══════════════════════════════════════════════════════════════════
 
 export default function Home() {
-    // ── Persistent state ──────────────────────────────────────────
-    const [semStart, setSemStartRaw] = useState<string>(() => {
-        if (typeof window === 'undefined') return new Date().toISOString().split('T')[0];
-        const saved = localStorage.getItem('fpt3_semStart');
-        if (saved) return saved;
-        const d = getMondayOf(new Date().toISOString().split('T')[0]);
-        return d.toISOString().split('T')[0];
-    });
-    const { auth } = usePage<PageProps>().props;
+    const { auth, semesterId, semStart, subjects, schedule, onlineDays, tasks, notes, examData, isDemo } = usePage<PageProps>().props;
     const user = auth.user;
 
-    const [subjects, setSubjects] = useState<Subject[]>(() => load('fpt3_subjects', DEFAULT_SUBJECTS));
-    const [schedule, setSchedule] = useState<Schedule>(() => load('fpt3_schedule', DEFAULT_SCHEDULE));
-    const [onlineDays, setOnlineDays] = useState<OnlineDays>(() => load('fpt3_online', null as unknown as OnlineDays) ?? buildDefaultOnline());
-    const [tasks, setTasks] = useState<Task[]>(() => load('fpt3_tasks', [] as Task[]));
-    const [notes, setNotes] = useState<Notes>(() => load('fpt3_notes', {} as Notes));
-    const [examData, setExamData] = useState<ExamData>(() => load('fpt3_exam', {} as ExamData));
-
-    // ── UI state ──────────────────────────────────────────────────
     const [tab, setTab] = useState<TabId>('schedule');
     const [weekView, setWeekView] = useState<number>(1);
     const [toast, setToast] = useState<string | null>(null);
     const [bellOpen, setBellOpen] = useState<boolean>(false);
     const [bellAnim, setBellAnim] = useState<boolean>(false);
-
-    // Modals: null = closed, string = open ('note:<subjectId>' | 'exam' | 'subjects' | 'schedule' | 'online')
     const [modal, setModal] = useState<ModalState>(null);
 
-    // ── Persist on change ─────────────────────────────────────────
-    useEffect(() => save('fpt3_semStart', semStart), [semStart]);
-    useEffect(() => save('fpt3_subjects', subjects), [subjects]);
-    useEffect(() => save('fpt3_schedule', schedule), [schedule]);
-    useEffect(() => save('fpt3_online', onlineDays), [onlineDays]);
-    useEffect(() => save('fpt3_tasks', tasks), [tasks]);
-    useEffect(() => save('fpt3_notes', notes), [notes]);
-    useEffect(() => save('fpt3_exam', examData), [examData]);
-
-    // ── Derived: current week number ──────────────────────────────
     const currentWeek = useMemo(() => {
         const start = new Date(semStart);
         start.setHours(0, 0, 0, 0);
@@ -213,13 +143,11 @@ export default function Home() {
         return Math.max(1, Math.min(TOTAL_WEEKS, diff));
     }, [semStart]);
 
-    // Sync weekView to current week on first load
     useEffect(() => {
         setWeekView(currentWeek);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [currentWeek]);
 
-    // ── Subject map for fast lookup ────────────────────────────────
     const subjectMap = useMemo(() => {
         const m: Record<string, Subject> = {};
         subjects.forEach((s) => {
@@ -228,7 +156,6 @@ export default function Home() {
         return m;
     }, [subjects]);
 
-    // ── Bell: urgent tasks (deadline < 24h) ───────────────────────
     const pendingTasks = tasks.filter((t) => !t.done);
     const urgentTasks = pendingTasks.filter((t) => {
         if (!t.deadline) return false;
@@ -245,44 +172,58 @@ export default function Home() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [urgentTasks.length]);
 
-    // ── Toast helper ──────────────────────────────────────────────
     const showToast = (msg: string) => {
         setToast(msg);
         setTimeout(() => setToast(null), 2800);
     };
 
-    // ── Set semester start (always snap to Monday) ─────────────────
-    const setSemStart = (dateStr: string) => {
-        const monday = getMondayOf(dateStr);
-        setSemStartRaw(monday.toISOString().split('T')[0]);
+    // Chặn mọi hành động ghi khi là demo (chưa đăng nhập) -> đẩy sang trang login
+    const requireAuth = (): boolean => {
+        if (isDemo) {
+            showToast('🔐 Đăng nhập để lưu thay đổi của bạn');
+            router.visit('/login');
+            return false;
+        }
+        return true;
     };
 
-    // ── Open / close helpers ──────────────────────────────────────
-    const openModal = (id: string) => setModal(id);
+    const openModal = (id: string) => {
+        if (isDemo) {
+            showToast('🔐 Đăng nhập để chỉnh sửa');
+            return;
+        }
+        setModal(id);
+    };
     const closeModal = () => setModal(null);
 
-    // ── Render ────────────────────────────────────────────────────
     return (
         <div style={css.root}>
             <style>{globalCss}</style>
-
             <div style={css.bgDots} />
 
             <Header
                 currentWeek={currentWeek}
-                pendingCount={pendingTasks.length}
                 urgentCount={urgentTasks.length}
                 bellAnim={bellAnim}
                 bellOpen={bellOpen}
                 setBellOpen={setBellOpen}
                 pendingTasks={pendingTasks}
                 user={user}
+                isDemo={isDemo}
             />
 
-            {/* ── Bottom Nav ── */}
             <BottomNav tab={tab} setTab={setTab} pendingCount={pendingTasks.length} />
 
-            {/* ── Main Content ── */}
+            {isDemo && (
+                <div style={css.demoBanner}>
+                    🔎 Bạn đang xem <strong>dữ liệu demo</strong>.{' '}
+                    <Link href="/login" style={{ color: '#FF6B35', fontWeight: 700 }}>
+                        Đăng nhập
+                    </Link>{' '}
+                    để dùng lịch học của riêng bạn.
+                </div>
+            )}
+
             <main style={css.main}>
                 {tab === 'schedule' && (
                     <ScheduleTab
@@ -299,25 +240,45 @@ export default function Home() {
                         openModal={openModal}
                     />
                 )}
-                {tab === 'tasks' && <TasksTab tasks={tasks} setTasks={setTasks} subjects={subjects} subjectMap={subjectMap} showToast={showToast} />}
+                {tab === 'tasks' && (
+                    <TasksTab
+                        tasks={tasks}
+                        subjects={subjects}
+                        subjectMap={subjectMap}
+                        showToast={showToast}
+                        requireAuth={requireAuth}
+                        isDemo={isDemo}
+                    />
+                )}
                 {tab === 'notes' && <NotesTab subjects={subjects} notes={notes} openModal={openModal} />}
-                {tab === 'settings' && <SettingsTab semStart={semStart} setSemStart={setSemStart} currentWeek={currentWeek} openModal={openModal} />}
+                {tab === 'settings' && (
+                    <SettingsTab
+                        semStart={semStart}
+                        semesterId={semesterId}
+                        currentWeek={currentWeek}
+                        openModal={openModal}
+                        showToast={showToast}
+                        isDemo={isDemo}
+                    />
+                )}
             </main>
 
-            {/* ── Modals ── */}
-            {modal === 'exam' && (
-                <ExamModal examData={examData} setExamData={setExamData} subjects={subjects} onClose={closeModal} showToast={showToast} />
+            {modal === 'exam' && semesterId && (
+                <ExamModal examData={examData} subjects={subjects} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
             )}
-            {modal === 'subjects' && <SubjectsModal subjects={subjects} setSubjects={setSubjects} onClose={closeModal} showToast={showToast} />}
-            {modal === 'schedule' && (
-                <ScheduleModal schedule={schedule} setSchedule={setSchedule} subjects={subjects} onClose={closeModal} showToast={showToast} />
+            {modal === 'subjects' && semesterId && (
+                <SubjectsModal subjects={subjects} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
             )}
-            {modal === 'online' && <OnlineModal onlineDays={onlineDays} setOnlineDays={setOnlineDays} onClose={closeModal} showToast={showToast} />}
-            {modal && modal.startsWith('note:') && (
-                <NoteModal subjectId={modal.slice(5)} subjectMap={subjectMap} notes={notes} setNotes={setNotes} onClose={closeModal} />
+            {modal === 'schedule' && semesterId && (
+                <ScheduleModal schedule={schedule} subjects={subjects} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
+            )}
+            {modal === 'online' && semesterId && (
+                <OnlineModal onlineDays={onlineDays} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
+            )}
+            {modal && modal.startsWith('note:') && semesterId && (
+                <NoteModal subjectId={modal.slice(5)} subjectMap={subjectMap} notes={notes} onClose={closeModal} showToast={showToast} />
             )}
 
-            {/* ── Toast ── */}
             {toast && (
                 <div style={css.toast} className="anim-fadeup">
                     {toast}
@@ -333,22 +294,22 @@ export default function Home() {
 
 interface HeaderProps {
     currentWeek: number;
-    pendingCount: number;
     urgentCount: number;
     bellAnim: boolean;
     bellOpen: boolean;
     setBellOpen: React.Dispatch<React.SetStateAction<boolean>>;
     pendingTasks: Task[];
+    user: { id: number; name: string; email: string } | null;
+    isDemo: boolean;
 }
 
-function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pendingTasks, user }) {
+function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pendingTasks, user }: HeaderProps) {
     const isExam = currentWeek > STUDY_WEEKS;
     const label = isExam ? `THI ${currentWeek - STUDY_WEEKS}` : `W${currentWeek}`;
     const sublabel = isExam ? 'TUẦN THI' : 'TUẦN HỌC';
 
     return (
         <header style={css.header}>
-            {/* Logo */}
             <div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                     <span style={{ fontSize: 22, fontWeight: 900, color: '#FF6B35', letterSpacing: -1 }}>FPT</span>
@@ -357,7 +318,6 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                 <div style={{ fontSize: 9, color: '#444', letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 1 }}>Management Toolkit</div>
             </div>
 
-            {/* Right side */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {user ? (
                     <button className="flex items-center gap-1.5 rounded-lg border border-[#34D39930] bg-[#34D39912] px-3 py-1.5 text-xs font-bold text-[#34D399]">
@@ -371,7 +331,7 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                         🔐 Đăng nhập
                     </Link>
                 )}
-                {/* Bell button */}
+
                 <div style={{ position: 'relative' }}>
                     <button
                         className={bellAnim ? 'anim-bell' : ''}
@@ -385,12 +345,9 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                         🔔
                         {urgentCount > 0 && <span style={css.bellBadge}>{urgentCount}</span>}
                     </button>
-
-                    {/* Bell dropdown */}
                     {bellOpen && <BellPanel tasks={pendingTasks} onClose={() => setBellOpen(false)} />}
                 </div>
 
-                {/* Week badge */}
                 <div style={css.weekBadge}>
                     <div style={{ fontSize: 8, color: '#FF6B3580', letterSpacing: 2, textTransform: 'uppercase' }}>{sublabel}</div>
                     <div style={{ fontSize: 20, fontWeight: 900, color: '#FF6B35', lineHeight: 1.1 }}>{label}</div>
@@ -400,16 +357,8 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
     );
 }
 
-// ── Bell Panel ────────────────────────────────────────────────────
-
-interface BellPanelProps {
-    tasks: Task[];
-    onClose: () => void;
-}
-
-function BellPanel({ tasks, onClose }: BellPanelProps) {
+function BellPanel({ tasks, onClose }: { tasks: Task[]; onClose: () => void }) {
     const [now, setNow] = useState<Date>(new Date());
-
     useEffect(() => {
         const id = setInterval(() => setNow(new Date()), 1000);
         return () => clearInterval(id);
@@ -420,7 +369,6 @@ function BellPanel({ tasks, onClose }: BellPanelProps) {
 
     return (
         <div style={css.bellPanel} className="anim-fadeup">
-            {/* Header */}
             <div
                 style={{
                     display: 'flex',
@@ -435,15 +383,11 @@ function BellPanel({ tasks, onClose }: BellPanelProps) {
                     ✕
                 </button>
             </div>
-
-            {/* Empty */}
             {tasks.length === 0 && <div style={{ padding: '28px 14px', textAlign: 'center', color: '#444', fontSize: 13 }}>Không có task nào 🎉</div>}
-
-            {/* Tasks with deadline */}
             {withDl.map((t) => {
                 const ms = new Date(t.deadline).getTime() - now.getTime();
                 const over = ms <= 0;
-                const warn = !over && ms < 3600000; // < 1h
+                const warn = !over && ms < 3600000;
                 const color = over ? '#EF4444' : warn ? '#FBBF24' : '#34D399';
                 return (
                     <div key={t.id} style={{ padding: '9px 14px', borderBottom: '1px solid #ffffff08' }}>
@@ -467,8 +411,6 @@ function BellPanel({ tasks, onClose }: BellPanelProps) {
                     </div>
                 );
             })}
-
-            {/* Tasks without deadline */}
             {noDl.length > 0 && <div style={{ padding: '7px 14px', fontSize: 11, color: '#444' }}>+{noDl.length} task chưa có deadline</div>}
         </div>
     );
@@ -478,20 +420,13 @@ function BellPanel({ tasks, onClose }: BellPanelProps) {
 // BOTTOM NAV
 // ═══════════════════════════════════════════════════════════════════
 
-interface BottomNavProps {
-    tab: TabId;
-    setTab: React.Dispatch<React.SetStateAction<TabId>>;
-    pendingCount: number;
-}
-
-function BottomNav({ tab, setTab, pendingCount }: BottomNavProps) {
+function BottomNav({ tab, setTab, pendingCount }: { tab: TabId; setTab: React.Dispatch<React.SetStateAction<TabId>>; pendingCount: number }) {
     const items: { id: TabId; icon: string; label: string; badge?: number }[] = [
         { id: 'schedule', icon: '📅', label: 'Lịch' },
         { id: 'tasks', icon: '✅', label: 'Task', badge: pendingCount },
         { id: 'notes', icon: '📝', label: 'Ghi chú' },
         { id: 'settings', icon: '⚙️', label: 'Cài đặt' },
     ];
-
     return (
         <nav style={css.nav}>
             {items.map((item) => {
@@ -510,7 +445,7 @@ function BottomNav({ tab, setTab, pendingCount }: BottomNavProps) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SCHEDULE TAB
+// SCHEDULE TAB (giữ nguyên logic hiển thị, chỉ đổi nguồn dữ liệu)
 // ═══════════════════════════════════════════════════════════════════
 
 interface ScheduleTabProps {
@@ -545,7 +480,6 @@ function ScheduleTab({
 
     return (
         <div style={css.tab} className="anim-fadeup">
-            {/* Week navigator */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.max(1, w - 1))}>
                     ‹
@@ -564,10 +498,8 @@ function ScheduleTab({
                 </button>
             </div>
 
-            {/* Week pills */}
             <WeekPills weekView={weekView} setWeekView={setWeekView} currentWeek={currentWeek} />
 
-            {/* Mode legend */}
             {!isExam && (
                 <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
                     {[
@@ -582,7 +514,6 @@ function ScheduleTab({
                 </div>
             )}
 
-            {/* Content */}
             {isExam ? (
                 <ExamWeek weekView={weekView} examData={examData} subjects={subjects} openModal={openModal} notes={notes} />
             ) : (
@@ -600,15 +531,15 @@ function ScheduleTab({
     );
 }
 
-// ── Week Pills ────────────────────────────────────────────────────
-
-interface WeekPillsProps {
+function WeekPills({
+    weekView,
+    setWeekView,
+    currentWeek,
+}: {
     weekView: number;
     setWeekView: React.Dispatch<React.SetStateAction<number>>;
     currentWeek: number;
-}
-
-function WeekPills({ weekView, setWeekView, currentWeek }: WeekPillsProps) {
+}) {
     return (
         <div style={{ display: 'flex', gap: 5, justifyContent: 'center', flexWrap: 'wrap' }}>
             {Array.from({ length: TOTAL_WEEKS }, (_, i) => i + 1).map((w) => {
@@ -639,9 +570,15 @@ function WeekPills({ weekView, setWeekView, currentWeek }: WeekPillsProps) {
     );
 }
 
-// ── Study Week ────────────────────────────────────────────────────
-
-interface StudyWeekProps {
+function StudyWeek({
+    weekView,
+    monday,
+    subjectMap,
+    schedule,
+    onlineDays,
+    notes,
+    openModal,
+}: {
     weekView: number;
     monday: Date;
     subjectMap: Record<string, Subject>;
@@ -649,11 +586,8 @@ interface StudyWeekProps {
     onlineDays: OnlineDays;
     notes: Notes;
     openModal: (id: string) => void;
-}
-
-function StudyWeek({ weekView, monday, subjectMap, schedule, onlineDays, notes, openModal }: StudyWeekProps) {
+}) {
     const onDays = onlineDays[weekView] || [];
-
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[1, 2, 3, 4, 5].map((dow) => {
@@ -661,16 +595,8 @@ function StudyWeek({ weekView, monday, subjectMap, schedule, onlineDays, notes, 
                 const today = isToday(date);
                 const online = onDays.includes(dow);
                 const slots = schedule[dow] || [];
-
                 return (
-                    <div
-                        key={dow}
-                        style={{
-                            ...css.card,
-                            ...(today ? { border: '1px solid #FF6B3540', boxShadow: '0 0 20px #FF6B3310' } : {}),
-                        }}
-                    >
-                        {/* Day header */}
+                    <div key={dow} style={{ ...css.card, ...(today ? { border: '1px solid #FF6B3540', boxShadow: '0 0 20px #FF6B3310' } : {}) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                             <span style={{ fontWeight: 800, fontSize: 13 }}>{DAY_NAMES[dow]}</span>
                             <span style={{ fontSize: 11, color: '#555', flex: 1 }}>
@@ -695,8 +621,6 @@ function StudyWeek({ weekView, monday, subjectMap, schedule, onlineDays, notes, 
                                 {online ? '🌐 Online' : '🏫 Offline'}
                             </span>
                         </div>
-
-                        {/* Slots */}
                         {slots.length === 0 && <div style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>Không có lịch học</div>}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                             {slots.map((sid, i) => {
@@ -732,22 +656,22 @@ function StudyWeek({ weekView, monday, subjectMap, schedule, onlineDays, notes, 
     );
 }
 
-// ── Exam Week ─────────────────────────────────────────────────────
-
-interface ExamWeekProps {
+function ExamWeek({
+    weekView,
+    examData,
+    subjects,
+    openModal,
+    notes,
+}: {
     weekView: number;
     examData: ExamData;
     subjects: Subject[];
     openModal: (id: string) => void;
     notes: Notes;
-}
-
-function ExamWeek({ weekView, examData, subjects, openModal, notes }: ExamWeekProps) {
+}) {
     const examWeekNum = weekView - STUDY_WEEKS;
-
     return (
         <div>
-            {/* Banner */}
             <div
                 style={{
                     ...css.card,
@@ -768,8 +692,6 @@ function ExamWeek({ weekView, examData, subjects, openModal, notes }: ExamWeekPr
                     ✏️ Sửa
                 </button>
             </div>
-
-            {/* Subject cards */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {subjects.map((sub) => {
                     const key = `w${weekView}_${sub.id}`;
@@ -811,52 +733,59 @@ function ExamWeek({ weekView, examData, subjects, openModal, notes }: ExamWeekPr
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// TASKS TAB
+// TASKS TAB (mutation qua router thay vì setState)
 // ═══════════════════════════════════════════════════════════════════
 
 interface TasksTabProps {
     tasks: Task[];
-    setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
     subjects: Subject[];
     subjectMap: Record<string, Subject>;
     showToast: (msg: string) => void;
+    requireAuth: () => boolean;
+    isDemo: boolean;
 }
 
-function TasksTab({ tasks, setTasks, subjects, subjectMap, showToast }: TasksTabProps) {
+function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo }: TasksTabProps) {
     const [newSub, setNewSub] = useState<string>(subjects[0]?.id || '');
     const [newText, setNewText] = useState<string>('');
     const [newDl, setNewDl] = useState<string>('');
     const [filter, setFilter] = useState<string>('ALL');
 
-    // Sync default subject when subjects change
     useEffect(() => {
         if (!subjects.find((s) => s.id === newSub)) setNewSub(subjects[0]?.id || '');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [subjects]);
 
     const addTask = () => {
+        if (!requireAuth()) return;
         if (!newText.trim()) return;
-        setTasks((prev) => [
+        router.post(
+            '/tasks',
+            { subject: newSub, text: newText.trim(), deadline: newDl || null },
             {
-                id: Date.now(),
-                subject: newSub,
-                text: newText.trim(),
-                deadline: newDl,
-                done: false,
-                createdAt: new Date().toISOString(),
+                preserveScroll: true,
+                onSuccess: () => {
+                    setNewText('');
+                    setNewDl('');
+                    showToast('✅ Đã thêm task!');
+                },
             },
-            ...prev,
-        ]);
-        setNewText('');
-        setNewDl('');
-        showToast('✅ Đã thêm task!');
+        );
     };
 
-    const toggleTask = (id: number) => setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
-    const deleteTask = (id: number) => {
-        setTasks((prev) => prev.filter((t) => t.id !== id));
-        showToast('🗑 Đã xóa');
+    const toggleTask = (id: number) => {
+        if (!requireAuth()) return;
+        router.patch(`/tasks/${id}/toggle`, {}, { preserveScroll: true, preserveState: true });
     };
+
+    const deleteTask = (id: number) => {
+        if (!requireAuth()) return;
+        router.delete(`/tasks/${id}`, {
+            preserveScroll: true,
+            onSuccess: () => showToast('🗑 Đã xóa'),
+        });
+    };
+
     const isOverdue = (dl: string) => !!dl && new Date(dl) < new Date();
 
     const filtered = filter === 'ALL' ? tasks : tasks.filter((t) => t.subject === filter);
@@ -865,7 +794,6 @@ function TasksTab({ tasks, setTasks, subjects, subjectMap, showToast }: TasksTab
 
     return (
         <div style={css.tab} className="anim-fadeup">
-            {/* Add task */}
             <div style={css.card}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: '#FF6B35', marginBottom: 6 }}>➕ Thêm Nhiệm Vụ</div>
                 <select value={newSub} onChange={(e) => setNewSub(e.target.value)} style={css.select}>
@@ -879,7 +807,7 @@ function TasksTab({ tasks, setTasks, subjects, subjectMap, showToast }: TasksTab
                     value={newText}
                     onChange={(e) => setNewText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addTask()}
-                    placeholder="Mô tả nhiệm vụ..."
+                    placeholder={isDemo ? 'Đăng nhập để thêm task...' : 'Mô tả nhiệm vụ...'}
                     style={css.input}
                 />
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -890,7 +818,6 @@ function TasksTab({ tasks, setTasks, subjects, subjectMap, showToast }: TasksTab
                 </div>
             </div>
 
-            {/* Stats row */}
             <div style={{ display: 'flex', gap: 8 }}>
                 {[
                     { label: 'Cần làm', val: tasks.filter((t) => !t.done).length, color: '#FF6B35' },
@@ -904,7 +831,6 @@ function TasksTab({ tasks, setTasks, subjects, subjectMap, showToast }: TasksTab
                 ))}
             </div>
 
-            {/* Filter chips */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {['ALL', ...subjects.map((s) => s.id)].map((f) => {
                     const active = f === filter;
@@ -926,7 +852,6 @@ function TasksTab({ tasks, setTasks, subjects, subjectMap, showToast }: TasksTab
                 })}
             </div>
 
-            {/* Task list */}
             {pending.length === 0 && done.length === 0 && (
                 <div style={{ textAlign: 'center', color: '#333', padding: '48px 0', fontSize: 14 }}>Không có task nào 🎉</div>
             )}
@@ -949,15 +874,19 @@ function TasksTab({ tasks, setTasks, subjects, subjectMap, showToast }: TasksTab
     );
 }
 
-interface TaskRowProps {
+function TaskRow({
+    task,
+    subjectMap,
+    onToggle,
+    onDelete,
+    overdue,
+}: {
     task: Task;
     subjectMap: Record<string, Subject>;
     onToggle: (id: number) => void;
     onDelete: (id: number) => void;
     overdue: boolean;
-}
-
-function TaskRow({ task, subjectMap, onToggle, onDelete, overdue }: TaskRowProps) {
+}) {
     const sub = subjectMap[task.subject] || { color: '#888' };
     return (
         <div
@@ -1018,13 +947,7 @@ function TaskRow({ task, subjectMap, onToggle, onDelete, overdue }: TaskRowProps
 // NOTES TAB
 // ═══════════════════════════════════════════════════════════════════
 
-interface NotesTabProps {
-    subjects: Subject[];
-    notes: Notes;
-    openModal: (id: string) => void;
-}
-
-function NotesTab({ subjects, notes, openModal }: NotesTabProps) {
+function NotesTab({ subjects, notes, openModal }: { subjects: Subject[]; notes: Notes; openModal: (id: string) => void }) {
     return (
         <div style={css.tab} className="anim-fadeup">
             <div style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>Nhấn vào môn để xem hoặc chỉnh sửa ghi chú</div>
@@ -1064,21 +987,35 @@ function NotesTab({ subjects, notes, openModal }: NotesTabProps) {
 // SETTINGS TAB
 // ═══════════════════════════════════════════════════════════════════
 
-interface SettingsTabProps {
+function SettingsTab({
+    semStart,
+    semesterId,
+    currentWeek,
+    openModal,
+    showToast,
+    isDemo,
+}: {
     semStart: string;
-    setSemStart: (dateStr: string) => void;
+    semesterId?: number;
     currentWeek: number;
     openModal: (id: string) => void;
-}
+    showToast: (msg: string) => void;
+    isDemo: boolean;
+}) {
+    const changeSemStart = (dateStr: string) => {
+        if (isDemo || !semesterId) {
+            showToast('🔐 Đăng nhập để chỉnh ngày bắt đầu học kỳ');
+            return;
+        }
+        router.put(`/semesters/${semesterId}`, { start_date: dateStr }, { preserveScroll: true });
+    };
 
-function SettingsTab({ semStart, setSemStart, currentWeek, openModal }: SettingsTabProps) {
     return (
         <div style={css.tab} className="anim-fadeup">
-            {/* Semester start */}
             <div style={css.card}>
                 <div style={css.cardTitle}>📅 Ngày Bắt Đầu Học Kỳ</div>
                 <div style={{ fontSize: 11, color: '#555', marginBottom: 6 }}>Chọn ngày Thứ 2 của tuần đầu tiên</div>
-                <input type="date" value={semStart} onChange={(e) => setSemStart(e.target.value)} style={css.input} />
+                <input type="date" value={semStart} onChange={(e) => changeSemStart(e.target.value)} style={css.input} disabled={isDemo} />
                 <div style={{ fontSize: 12, color: '#888' }}>
                     Tuần hiện tại:{' '}
                     <strong style={{ color: '#FF6B35' }}>
@@ -1087,7 +1024,6 @@ function SettingsTab({ semStart, setSemStart, currentWeek, openModal }: Settings
                 </div>
             </div>
 
-            {/* Quick settings */}
             <div style={css.card}>
                 <div style={css.cardTitle}>⚙️ Tuỳ Chỉnh</div>
                 {[
@@ -1121,7 +1057,6 @@ function SettingsTab({ semStart, setSemStart, currentWeek, openModal }: Settings
                 ))}
             </div>
 
-            {/* Progress */}
             <div style={css.card}>
                 <div style={css.cardTitle}>📊 Tiến Độ Học Kỳ</div>
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
@@ -1162,16 +1097,17 @@ function SettingsTab({ semStart, setSemStart, currentWeek, openModal }: Settings
 // MODALS
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Modal Shell ───────────────────────────────────────────────────
-
-interface ModalShellProps {
+function ModalShell({
+    title,
+    onClose,
+    children,
+    footer,
+}: {
     title: React.ReactNode;
     onClose: () => void;
     children: React.ReactNode;
     footer?: React.ReactNode;
-}
-
-function ModalShell({ title, onClose, children, footer }: ModalShellProps) {
+}) {
     return (
         <div style={css.overlay}>
             <div style={css.modal} className="anim-slideup">
@@ -1196,23 +1132,37 @@ function ModalShell({ title, onClose, children, footer }: ModalShellProps) {
     );
 }
 
-// ── Note Modal ────────────────────────────────────────────────────
-
-interface NoteModalProps {
+function NoteModal({
+    subjectId,
+    subjectMap,
+    notes,
+    onClose,
+    showToast,
+}: {
     subjectId: string;
     subjectMap: Record<string, Subject>;
     notes: Notes;
-    setNotes: React.Dispatch<React.SetStateAction<Notes>>;
     onClose: () => void;
-}
-
-function NoteModal({ subjectId, subjectMap, notes, setNotes, onClose }: NoteModalProps) {
+    showToast: (msg: string) => void;
+}) {
     const sub = subjectMap[subjectId] || { color: '#888', name: subjectId, full: '', id: subjectId };
     const [text, setText] = useState<string>(notes[subjectId] || '');
+    const [saving, setSaving] = useState(false);
 
     const saveNote = () => {
-        setNotes((n) => ({ ...n, [subjectId]: text }));
-        onClose();
+        setSaving(true);
+        router.put(
+            `/subjects/${subjectId}/note`,
+            { content: text },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    showToast('✅ Đã lưu ghi chú!');
+                    onClose();
+                },
+                onFinish: () => setSaving(false),
+            },
+        );
     };
 
     return (
@@ -1224,8 +1174,12 @@ function NoteModal({ subjectId, subjectMap, notes, setNotes, onClose }: NoteModa
                     <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
                         Hủy
                     </button>
-                    <button style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', background: sub.color }} onClick={saveNote}>
-                        💾 Lưu
+                    <button
+                        style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', background: sub.color, opacity: saving ? 0.6 : 1 }}
+                        onClick={saveNote}
+                        disabled={saving}
+                    >
+                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
                     </button>
                 </>
             }
@@ -1236,39 +1190,44 @@ function NoteModal({ subjectId, subjectMap, notes, setNotes, onClose }: NoteModa
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Nội dung, bài tập, công thức cần nhớ..."
                 rows={9}
-                style={{
-                    ...css.input,
-                    resize: 'vertical',
-                    lineHeight: 1.65,
-                    border: `1px solid ${sub.color}28`,
-                }}
+                style={{ ...css.input, resize: 'vertical', lineHeight: 1.65, border: `1px solid ${sub.color}28` }}
             />
         </ModalShell>
     );
 }
 
-// ── Exam Modal ────────────────────────────────────────────────────
-
-interface ExamModalProps {
+function ExamModal({
+    examData,
+    subjects,
+    semesterId,
+    onClose,
+    showToast,
+}: {
     examData: ExamData;
-    setExamData: React.Dispatch<React.SetStateAction<ExamData>>;
     subjects: Subject[];
+    semesterId: number;
     onClose: () => void;
     showToast: (msg: string) => void;
-}
-
-function ExamModal({ examData, setExamData, subjects, onClose, showToast }: ExamModalProps) {
+}) {
     const [local, setLocal] = useState<ExamData>(() => JSON.parse(JSON.stringify(examData)));
     const [activeW, setActiveW] = useState<number>(STUDY_WEEKS + 1);
+    const [saving, setSaving] = useState(false);
 
     const update = (subId: string, field: keyof ExamEntry, val: string) => {
         const key = `w${activeW}_${subId}`;
         setLocal((prev) => ({ ...prev, [key]: { ...prev[key], [field]: val } }));
     };
+
     const saveExam = () => {
-        setExamData(local);
-        showToast('✅ Đã lưu lịch thi!');
-        onClose();
+        setSaving(true);
+        router.put(`/semesters/${semesterId}/exam-entries`, asFormData({ examData: local }), {
+            preserveScroll: true,
+            onSuccess: () => {
+                showToast('✅ Đã lưu lịch thi!');
+                onClose();
+            },
+            onFinish: () => setSaving(false),
+        });
     };
 
     return (
@@ -1280,13 +1239,16 @@ function ExamModal({ examData, setExamData, subjects, onClose, showToast }: Exam
                     <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
                         Hủy
                     </button>
-                    <button style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center' }} onClick={saveExam}>
-                        💾 Lưu
+                    <button
+                        style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={saveExam}
+                        disabled={saving}
+                    >
+                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
                     </button>
                 </>
             }
         >
-            {/* Week tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid #ffffff0f', margin: '-12px -16px 0', padding: '0 16px' }}>
                 {[STUDY_WEEKS + 1, STUDY_WEEKS + 2].map((w) => (
                     <button
@@ -1308,7 +1270,6 @@ function ExamModal({ examData, setExamData, subjects, onClose, showToast }: Exam
                     </button>
                 ))}
             </div>
-
             {subjects.map((sub) => {
                 const key = `w${activeW}_${sub.id}`;
                 const exam = local[key] || {};
@@ -1340,20 +1301,22 @@ function ExamModal({ examData, setExamData, subjects, onClose, showToast }: Exam
     );
 }
 
-// ── Subjects Modal ────────────────────────────────────────────────
-
-interface SubjectsModalProps {
+function SubjectsModal({
+    subjects,
+    semesterId,
+    onClose,
+    showToast,
+}: {
     subjects: Subject[];
-    setSubjects: React.Dispatch<React.SetStateAction<Subject[]>>;
+    semesterId: number;
     onClose: () => void;
     showToast: (msg: string) => void;
-}
-
-function SubjectsModal({ subjects, setSubjects, onClose, showToast }: SubjectsModalProps) {
+}) {
     const [local, setLocal] = useState<Subject[]>(subjects.map((s) => ({ ...s })));
     const [newName, setNewName] = useState<string>('');
     const [newFull, setNewFull] = useState<string>('');
     const [newColor, setNewColor] = useState<string>(PRESET_COLORS[5]);
+    const [saving, setSaving] = useState(false);
 
     const updateField = (idx: number, field: keyof Subject, val: string) =>
         setLocal((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: val } : s)));
@@ -1372,9 +1335,15 @@ function SubjectsModal({ subjects, setSubjects, onClose, showToast }: SubjectsMo
     };
 
     const saveSubjects = () => {
-        setSubjects(local);
-        showToast('✅ Đã lưu môn học!');
-        onClose();
+        setSaving(true);
+        router.put(`/semesters/${semesterId}/subjects`, asFormData({ subjects: local }), {
+            preserveScroll: true,
+            onSuccess: () => {
+                showToast('✅ Đã lưu môn học!');
+                onClose();
+            },
+            onFinish: () => setSaving(false),
+        });
     };
 
     return (
@@ -1386,15 +1355,18 @@ function SubjectsModal({ subjects, setSubjects, onClose, showToast }: SubjectsMo
                     <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
                         Hủy
                     </button>
-                    <button style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center' }} onClick={saveSubjects}>
-                        💾 Lưu
+                    <button
+                        style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={saveSubjects}
+                        disabled={saving}
+                    >
+                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
                     </button>
                 </>
             }
         >
-            {/* Existing subjects */}
             {local.map((sub, i) => (
-                <div key={sub.id} style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${sub.color}` }}>
+                <div key={i} style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${sub.color}` }}>
                     <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginBottom: 6 }}>
                         <input
                             value={sub.name}
@@ -1432,7 +1404,6 @@ function SubjectsModal({ subjects, setSubjects, onClose, showToast }: SubjectsMo
                 </div>
             ))}
 
-            {/* Add new */}
             <div style={{ background: '#0d0d22', border: '1px dashed #ffffff15', borderRadius: 10, padding: '12px' }}>
                 <div style={{ fontSize: 12, color: '#666', fontWeight: 600, marginBottom: 8 }}>➕ Thêm môn mới</div>
                 <div style={{ display: 'flex', gap: 7, marginBottom: 6 }}>
@@ -1467,31 +1438,37 @@ function SubjectsModal({ subjects, setSubjects, onClose, showToast }: SubjectsMo
     );
 }
 
-// ── Schedule Modal ────────────────────────────────────────────────
-
-interface ScheduleModalProps {
+function ScheduleModal({
+    schedule,
+    subjects,
+    semesterId,
+    onClose,
+    showToast,
+}: {
     schedule: Schedule;
-    setSchedule: React.Dispatch<React.SetStateAction<Schedule>>;
     subjects: Subject[];
+    semesterId: number;
     onClose: () => void;
     showToast: (msg: string) => void;
-}
-
-function ScheduleModal({ schedule, setSchedule, subjects, onClose, showToast }: ScheduleModalProps) {
+}) {
     const [local, setLocal] = useState<Schedule>(JSON.parse(JSON.stringify(schedule)));
+    const [saving, setSaving] = useState(false);
 
     const updateSlot = (day: number, idx: number, val: string) =>
-        setLocal((prev) => ({
-            ...prev,
-            [day]: prev[day].map((s, i) => (i === idx ? val : s)),
-        }));
+        setLocal((prev) => ({ ...prev, [day]: prev[day].map((s, i) => (i === idx ? val : s)) }));
     const addSlot = (day: number) => setLocal((prev) => ({ ...prev, [day]: [...(prev[day] || []), subjects[0]?.id || ''] }));
     const removeSlot = (day: number, idx: number) => setLocal((prev) => ({ ...prev, [day]: prev[day].filter((_, i) => i !== idx) }));
 
     const saveSchedule = () => {
-        setSchedule(local);
-        showToast('✅ Đã lưu lịch học!');
-        onClose();
+        setSaving(true);
+        router.put(`/semesters/${semesterId}/schedule`, asFormData({ schedule: local }), {
+            preserveScroll: true,
+            onSuccess: () => {
+                showToast('✅ Đã lưu lịch học!');
+                onClose();
+            },
+            onFinish: () => setSaving(false),
+        });
     };
 
     return (
@@ -1503,8 +1480,12 @@ function ScheduleModal({ schedule, setSchedule, subjects, onClose, showToast }: 
                     <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
                         Hủy
                     </button>
-                    <button style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center' }} onClick={saveSchedule}>
-                        💾 Lưu
+                    <button
+                        style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={saveSchedule}
+                        disabled={saving}
+                    >
+                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
                     </button>
                 </>
             }
@@ -1548,17 +1529,19 @@ function ScheduleModal({ schedule, setSchedule, subjects, onClose, showToast }: 
     );
 }
 
-// ── Online/Offline Modal ──────────────────────────────────────────
-
-interface OnlineModalProps {
+function OnlineModal({
+    onlineDays,
+    semesterId,
+    onClose,
+    showToast,
+}: {
     onlineDays: OnlineDays;
-    setOnlineDays: React.Dispatch<React.SetStateAction<OnlineDays>>;
+    semesterId: number;
     onClose: () => void;
     showToast: (msg: string) => void;
-}
-
-function OnlineModal({ onlineDays, setOnlineDays, onClose, showToast }: OnlineModalProps) {
+}) {
     const [local, setLocal] = useState<OnlineDays>(JSON.parse(JSON.stringify(onlineDays)));
+    const [saving, setSaving] = useState(false);
 
     const toggle = (week: number, day: number) => {
         setLocal((prev) => {
@@ -1571,9 +1554,15 @@ function OnlineModal({ onlineDays, setOnlineDays, onClose, showToast }: OnlineMo
     const allOff = (w: number) => setLocal((prev) => ({ ...prev, [w]: [] }));
 
     const saveOnline = () => {
-        setOnlineDays(local);
-        showToast('✅ Đã lưu lịch Online/Offline!');
-        onClose();
+        setSaving(true);
+        router.put(`/semesters/${semesterId}/online-days`, asFormData({ onlineDays: local }), {
+            preserveScroll: true,
+            onSuccess: () => {
+                showToast('✅ Đã lưu lịch Online/Offline!');
+                onClose();
+            },
+            onFinish: () => setSaving(false),
+        });
     };
 
     return (
@@ -1585,14 +1574,17 @@ function OnlineModal({ onlineDays, setOnlineDays, onClose, showToast }: OnlineMo
                     <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
                         Hủy
                     </button>
-                    <button style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center' }} onClick={saveOnline}>
-                        💾 Lưu
+                    <button
+                        style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={saveOnline}
+                        disabled={saving}
+                    >
+                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
                     </button>
                 </>
             }
         >
             <div style={{ fontSize: 11, color: '#555' }}>Nhấn vào ngày để bật/tắt Online. Mặc định = Offline.</div>
-
             {Array.from({ length: STUDY_WEEKS }, (_, i) => i + 1).map((w) => {
                 const online = local[w] || [];
                 return (
@@ -1642,47 +1634,34 @@ function OnlineModal({ onlineDays, setOnlineDays, onClose, showToast }: OnlineMo
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GLOBAL CSS (fonts, reset, keyframe animations)
+// GLOBAL CSS
 // ═══════════════════════════════════════════════════════════════════
 
 const globalCss = `
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
-
     *, *::before, *::after { box-sizing: border-box; }
-
     input, select, textarea, button { font-family: inherit; }
-
     ::-webkit-scrollbar { width: 3px; }
     ::-webkit-scrollbar-thumb { background: #ffffff18; border-radius: 4px; }
-
     input[type="date"]::-webkit-calendar-picker-indicator,
     input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
-
     @keyframes fadeUp   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes slideUp  { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes bellWig  { 0%,100%{transform:rotate(0)} 20%{transform:rotate(18deg)} 40%{transform:rotate(-14deg)} 60%{transform:rotate(9deg)} 80%{transform:rotate(-4deg)} }
     @keyframes toastIn  { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
     @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:.4} }
-
     .anim-fadeup  { animation: fadeUp  .22s ease forwards; }
     .anim-slideup { animation: slideUp .28s ease forwards; }
     .anim-bell    { animation: bellWig .55s ease; }
     .anim-pulse   { animation: pulse 2s ease-in-out infinite; }
-    `;
+`;
 
 // ═══════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════
 
 const css: Record<string, CSSProperties> = {
-    // Layout
-    root: {
-        fontFamily: "'Outfit', 'Segoe UI', sans-serif",
-        background: '#06061a',
-        minHeight: '100vh',
-        color: '#e2e2f0',
-        position: 'relative',
-    },
+    root: { fontFamily: "'Outfit', 'Segoe UI', sans-serif", background: '#06061a', minHeight: '100vh', color: '#e2e2f0', position: 'relative' },
     bgDots: {
         position: 'fixed',
         inset: 0,
@@ -1691,20 +1670,20 @@ const css: Record<string, CSSProperties> = {
         backgroundImage: 'radial-gradient(#ffffff06 1px, transparent 1px)',
         backgroundSize: '28px 28px',
     },
-    main: {
+    main: { position: 'relative', zIndex: 10, paddingTop: 8, paddingBottom: 36 },
+    tab: { padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 11 },
+    demoBanner: {
         position: 'relative',
         zIndex: 10,
-        paddingTop: 8,
-        paddingBottom: 36,
+        margin: '8px 14px 0',
+        padding: '9px 13px',
+        borderRadius: 10,
+        background: '#FF6B3512',
+        border: '1px solid #FF6B3530',
+        fontSize: 12,
+        color: '#ccc',
+        textAlign: 'center',
     },
-    tab: {
-        padding: '12px 14px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 11,
-    },
-
-    // Header
     header: {
         position: 'sticky',
         top: 0,
@@ -1753,15 +1732,7 @@ const css: Record<string, CSSProperties> = {
         overflow: 'hidden',
         boxShadow: '0 10px 36px rgba(0,0,0,.65)',
     },
-    weekBadge: {
-        textAlign: 'center',
-        background: '#FF6B3512',
-        border: '1px solid #FF6B3528',
-        borderRadius: 10,
-        padding: '4px 13px',
-    },
-
-    // Nav
+    weekBadge: { textAlign: 'center', background: '#FF6B3512', border: '1px solid #FF6B3528', borderRadius: 10, padding: '4px 13px' },
     nav: {
         position: 'sticky',
         top: 58,
@@ -1806,8 +1777,6 @@ const css: Record<string, CSSProperties> = {
         background: '#FF6B35',
         borderRadius: 2,
     },
-
-    // Cards & inputs
     card: {
         background: '#0d0d22',
         border: '1px solid #ffffff0a',
@@ -1818,7 +1787,6 @@ const css: Record<string, CSSProperties> = {
         gap: 8,
     },
     cardTitle: { fontWeight: 700, fontSize: 14 },
-
     input: {
         background: '#1a1a32',
         border: '1px solid #ffffff10',
@@ -1871,8 +1839,6 @@ const css: Record<string, CSSProperties> = {
         cursor: 'pointer',
         fontWeight: 600,
     },
-
-    // Week navigation
     arrowBtn: {
         background: '#ffffff0a',
         border: '1px solid #ffffff10',
@@ -1887,16 +1853,7 @@ const css: Record<string, CSSProperties> = {
         justifyContent: 'center',
         flexShrink: 0,
     },
-    nowTag: {
-        background: '#FF6B35',
-        color: '#fff',
-        fontSize: 9,
-        padding: '2px 7px',
-        borderRadius: 20,
-        fontWeight: 700,
-    },
-
-    // Modal
+    nowTag: { background: '#FF6B35', color: '#fff', fontSize: 9, padding: '2px 7px', borderRadius: 20, fontWeight: 700 },
     overlay: {
         position: 'fixed',
         inset: 0,
@@ -1919,15 +1876,7 @@ const css: Record<string, CSSProperties> = {
         flexDirection: 'column',
         overflow: 'hidden',
     },
-    closeBtn: {
-        background: 'none',
-        border: 'none',
-        color: '#555',
-        fontSize: 18,
-        cursor: 'pointer',
-    },
-
-    // Toast
+    closeBtn: { background: 'none', border: 'none', color: '#555', fontSize: 18, cursor: 'pointer' },
     toast: {
         position: 'fixed',
         bottom: 22,

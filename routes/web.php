@@ -29,5 +29,4 @@ Route::middleware('auth')->group(function () {
     Route::put('/semesters/{semester}/exam-entries', [ExamEntryController::class, 'sync'])->name('exam-entries.sync');
 });
  
-require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

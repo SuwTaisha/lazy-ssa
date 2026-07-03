@@ -16,7 +16,6 @@ class HomeController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-
         if (! $user) {
             return Inertia::render('home/home', [
                 'semStart' => $this->mondayOf(Carbon::now())->toDateString(),
@@ -88,7 +87,7 @@ class HomeController extends Controller
             }
         }
 
-        return Inertia::render('Home', [
+        return Inertia::render('home/home', [
             'semesterId' => $semester->id,
             'semStart' => $semester->start_date->toDateString(),
             'subjects' => $subjects,
