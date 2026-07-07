@@ -1453,6 +1453,8 @@ function ScheduleModal({
 }) {
     const [local, setLocal] = useState<Schedule>(JSON.parse(JSON.stringify(schedule)));
     const [saving, setSaving] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const updateSlot = (day: number, idx: number, val: string) =>
         setLocal((prev) => ({ ...prev, [day]: prev[day].map((s, i) => (i === idx ? val : s)) }));
@@ -1468,6 +1470,24 @@ function ScheduleModal({
                 onClose();
             },
             onFinish: () => setSaving(false),
+        });
+    };
+
+    const importIcs = (file: File) => {
+        const form = new FormData();
+        form.append('ics_file', file);
+        setImporting(true);
+        router.post(`/semesters/${semesterId}/schedule/import`, form, {
+            preserveScroll: true,
+            onSuccess: () => {
+                showToast('✅ Đã nhập lịch học từ file .ics!');
+                onClose();
+            },
+            onError: (errors) => showToast(`❌ ${errors.ics_file || 'Không thể nhập file .ics'}`),
+            onFinish: () => {
+                setImporting(false);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            },
         });
     };
 
@@ -1490,6 +1510,23 @@ function ScheduleModal({
                 </>
             }
         >
+            <div style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: '#999', flex: 1 }}>Nhập lịch học tự động từ file .ics</span>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".ics"
+                    style={{ display: 'none' }}
+                    onChange={(e) => e.target.files?.[0] && importIcs(e.target.files[0])}
+                />
+                <button
+                    style={{ ...css.smallBtn, opacity: importing ? 0.6 : 1 }}
+                    disabled={importing}
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    📥 {importing ? 'Đang nhập...' : 'Nhập file .ics'}
+                </button>
+            </div>
             {[1, 2, 3, 4, 5].map((day) => (
                 <div key={day} style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px' }}>
                     <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{DAY_NAMES[day]}</div>
