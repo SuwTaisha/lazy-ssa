@@ -33,7 +33,6 @@ interface DatedScheduleItem {
     isOnline: boolean | null;
 }
 type ScheduleByDate = Record<string, DatedScheduleItem[]>; // 'YYYY-MM-DD' -> subjects học ngày đó
-type OnlineByDate = Record<string, boolean>; // 'YYYY-MM-DD' -> có buổi online hay không
 
 interface Task {
     id: number;
@@ -66,7 +65,6 @@ interface PageProps {
     subjects: Subject[];
     schedule: Schedule;
     scheduleByDate: ScheduleByDate;
-    onlineByDate: OnlineByDate;
     onlineDays: OnlineDays;
     tasks: Task[];
     notes: Notes;
@@ -145,7 +143,7 @@ function fmtCountdown(ms: number): string {
 // ═══════════════════════════════════════════════════════════════════
 
 export default function Home() {
-    const { auth, semesterId, semStart, subjects, schedule, scheduleByDate, onlineByDate, onlineDays, tasks, notes, examData, isDemo } =
+    const { auth, semesterId, semStart, subjects, schedule, scheduleByDate, onlineDays, tasks, notes, examData, isDemo } =
         usePage<PageProps>().props;
     const user = auth.user;
 
@@ -257,7 +255,6 @@ export default function Home() {
                         subjectMap={subjectMap}
                         schedule={schedule}
                         scheduleByDate={scheduleByDate}
-                        onlineByDate={onlineByDate}
                         onlineDays={onlineDays}
                         examData={examData}
                         notes={notes}
@@ -344,9 +341,20 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {user ? (
-                    <button className="flex items-center gap-1.5 rounded-lg border border-[#34D39930] bg-[#34D39912] px-3 py-1.5 text-xs font-bold text-[#34D399]">
-                        👤 {user.name}
-                    </button>
+                    <>
+                        <button className="flex items-center gap-1.5 rounded-lg border border-[#34D39930] bg-[#34D39912] px-3 py-1.5 text-xs font-bold text-[#34D399]">
+                            👤 {user.name}
+                        </button>
+                        <Link
+                            href="/logout"
+                            method="post"
+                            as="button"
+                            title="Đăng xuất"
+                            className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/20 active:scale-95"
+                        >
+                            🚪
+                        </Link>
+                    </>
                 ) : (
                     <Link
                         href="/login"
@@ -481,7 +489,6 @@ interface ScheduleTabProps {
     subjectMap: Record<string, Subject>;
     schedule: Schedule;
     scheduleByDate: ScheduleByDate;
-    onlineByDate: OnlineByDate;
     onlineDays: OnlineDays;
     examData: ExamData;
     notes: Notes;
@@ -497,7 +504,6 @@ function ScheduleTab({
     subjectMap,
     schedule,
     scheduleByDate,
-    onlineByDate,
     onlineDays,
     examData,
     notes,
@@ -551,7 +557,6 @@ function ScheduleTab({
                     subjectMap={subjectMap}
                     schedule={schedule}
                     scheduleByDate={scheduleByDate}
-                    onlineByDate={onlineByDate}
                     onlineDays={onlineDays}
                     notes={notes}
                     openModal={openModal}
@@ -606,7 +611,6 @@ function StudyWeek({
     subjectMap,
     schedule,
     scheduleByDate,
-    onlineByDate,
     onlineDays,
     notes,
     openModal,
@@ -616,7 +620,6 @@ function StudyWeek({
     subjectMap: Record<string, Subject>;
     schedule: Schedule;
     scheduleByDate: ScheduleByDate;
-    onlineByDate: OnlineByDate;
     onlineDays: OnlineDays;
     notes: Notes;
     openModal: (id: string) => void;
@@ -628,13 +631,16 @@ function StudyWeek({
                 const date = getDayDate(monday, dow);
                 const today = isToday(date);
                 const dateStr = toISODate(date);
-                // Có dữ liệu import cho đúng ngày này -> ưu tiên trạng thái online/offline
-                // suy ra từ phòng học thật; không thì dùng onlineDays lặp lại theo tuần (tạo tay).
-                const online = dateStr in onlineByDate ? onlineByDate[dateStr] : onDays.includes(dow);
+                // Slot tạo tay (không có isOnline riêng) fallback theo onlineDays lặp lại
+                // theo tuần; slot import .ics đã có isOnline riêng theo đúng phòng học.
+                const dayFallbackOnline = onDays.includes(dow);
                 // Buổi lặp lại hàng tuần (tạo tay) + buổi đúng ngày cụ thể (import .ics) của
                 // riêng ngày này, in chung lên 1 danh sách cho ô lịch của ngày đó.
                 const dated = scheduleByDate[dateStr] || [];
-                const items: { code: string; slotOrder?: number }[] = [...(schedule[dow] || []).map((code) => ({ code })), ...dated];
+                const items: { code: string; slotOrder?: number; isOnline?: boolean | null }[] = [
+                    ...(schedule[dow] || []).map((code) => ({ code })),
+                    ...dated,
+                ];
                 return (
                     <div key={dow} style={{ ...css.card, ...(today ? { border: '1px solid #FF6B3540', boxShadow: '0 0 20px #FF6B3310' } : {}) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -647,19 +653,6 @@ function StudyWeek({
                                     </span>
                                 )}
                             </span>
-                            <span
-                                style={{
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    padding: '2px 9px',
-                                    borderRadius: 20,
-                                    background: online ? '#00C6FF14' : '#FF6B3514',
-                                    color: online ? '#00C6FF' : '#FF6B35',
-                                    border: `1px solid ${online ? '#00C6FF30' : '#FF6B3530'}`,
-                                }}
-                            >
-                                {online ? '🌐 Online' : '🏫 Offline'}
-                            </span>
                         </div>
                         {items.length === 0 && <div style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>Không có lịch học</div>}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -667,6 +660,7 @@ function StudyWeek({
                                 const sub = subjectMap[item.code];
                                 if (!sub) return null;
                                 const hasNote = !!(notes[item.code] && notes[item.code].trim());
+                                const online = item.isOnline ?? dayFallbackOnline;
                                 return (
                                     <div
                                         key={i}
@@ -679,7 +673,22 @@ function StudyWeek({
                                     >
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                                             <span style={{ color: sub.color, fontWeight: 800, fontSize: 13 }}>{sub.name}</span>
-                                            <span style={{ fontSize: 9, color: '#555' }}>SLOT {item.slotOrder ?? i + 1}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span
+                                                    style={{
+                                                        fontSize: 9,
+                                                        fontWeight: 700,
+                                                        padding: '2px 7px',
+                                                        borderRadius: 20,
+                                                        background: online ? '#00C6FF14' : '#FF6B3514',
+                                                        color: online ? '#00C6FF' : '#FF6B35',
+                                                        border: `1px solid ${online ? '#00C6FF30' : '#FF6B3530'}`,
+                                                    }}
+                                                >
+                                                    {online ? '🌐 Online' : '🏫 Offline'}
+                                                </span>
+                                                <span style={{ fontSize: 9, color: '#555' }}>SLOT {item.slotOrder ?? i + 1}</span>
+                                            </div>
                                         </div>
                                         <div style={{ fontSize: 11, color: '#888', marginBottom: 7 }}>{sub.full}</div>
                                         <button style={css.smallBtn} onClick={() => openModal(`note:${item.code}`)}>

@@ -23,7 +23,6 @@ class HomeController extends Controller
                 'subjects' => $this->demoSubjects(),
                 'schedule' => $this->demoSchedule(),
                 'scheduleByDate' => (object) [],
-                'onlineByDate' => (object) [],
                 'onlineDays' => $this->demoOnlineDays(),
                 'tasks' => [],
                 'notes' => (object) [],
@@ -97,12 +96,6 @@ class HomeController extends Controller
             ])->all()
         );
 
-        // Trạng thái online/offline theo ngày cụ thể (suy ra từ phòng học lúc import) —
-        // ưu tiên hơn onlineDays theo tuần (vốn chỉ áp dụng cho lịch lặp lại tạo tay).
-        $onlineByDate = collect($byDate)->map(
-            fn ($items) => collect($items)->contains(fn ($i) => $i['isOnline'] === true)
-        );
-
         $onlineDays = [];
         foreach (range(1, self::STUDY_WEEKS) as $w) {
             $onlineDays[$w] = [];
@@ -145,7 +138,6 @@ class HomeController extends Controller
             'subjects' => $subjects,
             'schedule' => $schedule,
             'scheduleByDate' => (object) $scheduleByDate->all(),
-            'onlineByDate' => (object) $onlineByDate->all(),
             'onlineDays' => $onlineDays,
             'tasks' => $tasks,
             'notes' => (object) $notes,
