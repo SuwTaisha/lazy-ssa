@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Home;
 
 use App\Http\Controllers\Controller;
+use App\Models\ScheduleSlot;
 use App\Models\Semester;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -21,6 +22,8 @@ class HomeController extends Controller
                 'semStart' => $this->mondayOf(Carbon::now())->toDateString(),
                 'subjects' => $this->demoSubjects(),
                 'schedule' => $this->demoSchedule(),
+                'scheduleByDate' => (object) [],
+                'onlineByDate' => (object) [],
                 'onlineDays' => $this->demoOnlineDays(),
                 'tasks' => [],
                 'notes' => (object) [],
@@ -39,18 +42,67 @@ class HomeController extends Controller
             'color' => $s->color,
         ])->values();
 
-        
+        // Slot lặp lại hàng tuần (tạo thủ công qua UI, class_date null) -> lịch tuần cũ.
+        // Gom TẤT CẢ slot của mọi môn lại rồi sort chung theo ngày, thay vì sort riêng
+        // từng môn rồi nối mảng lại (thứ tự sẽ sai nếu 2 môn khác nhau cùng học 1 ngày,
+        // vì lúc đó thứ tự phụ thuộc vào thứ tự lặp qua $subjects chứ không phải slot_order).
         $schedule = [];
         foreach (range(1, 5) as $day) {
             $schedule[$day] = [];
         }
+        $allSlots = collect();
         foreach ($semester->subjects as $subject) {
-            foreach ($subject->scheduleSlots->sortBy('slot_order') as $slot) {
-                $schedule[$slot->day_of_week][] = $subject->code;
+            foreach ($subject->scheduleSlots as $slot) {
+                if ($slot->class_date !== null) {
+                    continue; // buổi có ngày cụ thể -> đi vào $upcomingSchedule, không vào lịch tuần
+                }
+                $allSlots->push([
+                    'day' => $slot->day_of_week,
+                    'sort_key' => sprintf('%03d', $slot->slot_order),
+                    'code' => $subject->code,
+                ]);
             }
         }
+        foreach ($allSlots->groupBy('day') as $day => $items) {
+            $schedule[$day] = $items->sortBy('sort_key')->pluck('code')->values()->all();
+        }
 
-        
+        // Lịch theo ngày cụ thể (từ import .ics): map ngày -> danh sách môn học đúng ngày
+        // đó, để in thẳng lên lịch tuần (mỗi tuần hiển thị đúng dữ liệu thật của tuần đó,
+        // thay vì lặp lại 1 mẫu cố định). Chỉ giữ từ hôm nay trở đi.
+        $today = Carbon::today()->toDateString();
+        $byDate = [];
+        foreach ($semester->subjects as $subject) {
+            foreach ($subject->scheduleSlots as $slot) {
+                if ($slot->class_date === null || $slot->class_date->toDateString() < $today) {
+                    continue;
+                }
+                $byDate[$slot->class_date->toDateString()][] = [
+                    'code' => $subject->code,
+                    'startTime' => $slot->start_time,
+                    'endTime' => $slot->end_time,
+                    'slotOrder' => $slot->slot_order,
+                    'isOnline' => $slot->is_online,
+                    'sort_key' => $slot->start_time ?? '',
+                ];
+            }
+        }
+        $scheduleByDate = collect($byDate)->map(
+            fn ($items) => collect($items)->sortBy('sort_key')->values()->map(fn ($i) => [
+                'code' => $i['code'],
+                'startTime' => $i['startTime'],
+                'endTime' => $i['endTime'],
+                'slotOrder' => $i['slotOrder'],
+                'isOnline' => $i['isOnline'],
+            ])->all()
+        );
+
+        // Trạng thái online/offline theo ngày cụ thể (suy ra từ phòng học lúc import) —
+        // ưu tiên hơn onlineDays theo tuần (vốn chỉ áp dụng cho lịch lặp lại tạo tay).
+        $onlineByDate = collect($byDate)->map(
+            fn ($items) => collect($items)->contains(fn ($i) => $i['isOnline'] === true)
+        );
+
         $onlineDays = [];
         foreach (range(1, self::STUDY_WEEKS) as $w) {
             $onlineDays[$w] = [];
@@ -92,6 +144,8 @@ class HomeController extends Controller
             'semStart' => $semester->start_date->toDateString(),
             'subjects' => $subjects,
             'schedule' => $schedule,
+            'scheduleByDate' => (object) $scheduleByDate->all(),
+            'onlineByDate' => (object) $onlineByDate->all(),
             'onlineDays' => $onlineDays,
             'tasks' => $tasks,
             'notes' => (object) $notes,
@@ -99,7 +153,6 @@ class HomeController extends Controller
             'isDemo' => false,
         ]);
     }
-
 
     private function currentSemesterFor($user): Semester
     {
@@ -126,7 +179,7 @@ class HomeController extends Controller
 
         foreach ($this->demoSchedule() as $day => $codes) {
             foreach ($codes as $order => $code) {
-                \App\Models\ScheduleSlot::create([
+                ScheduleSlot::create([
                     'subject_id' => $subjectIds[$code],
                     'day_of_week' => $day,
                     'slot_order' => $order,
@@ -174,7 +227,6 @@ class HomeController extends Controller
             5 => ['CSI106', 'CEA201'],
         ];
     }
-
 
     private function demoOnlineDays(): array
     {

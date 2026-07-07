@@ -25,6 +25,16 @@ interface Subject {
 type Schedule = Record<number, string[]>; // day (1-5) -> subject codes
 type OnlineDays = Record<number, number[]>; // week -> days online
 
+interface DatedScheduleItem {
+    code: string;
+    startTime: string | null;
+    endTime: string | null;
+    slotOrder: number;
+    isOnline: boolean | null;
+}
+type ScheduleByDate = Record<string, DatedScheduleItem[]>; // 'YYYY-MM-DD' -> subjects học ngày đó
+type OnlineByDate = Record<string, boolean>; // 'YYYY-MM-DD' -> có buổi online hay không
+
 interface Task {
     id: number;
     subject: string; // subject code, "" nếu không gắn môn
@@ -55,6 +65,8 @@ interface PageProps {
     semStart: string;
     subjects: Subject[];
     schedule: Schedule;
+    scheduleByDate: ScheduleByDate;
+    onlineByDate: OnlineByDate;
     onlineDays: OnlineDays;
     tasks: Task[];
     notes: Notes;
@@ -90,8 +102,14 @@ const DAY_SHORT: Record<number, string> = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 
 const STUDY_WEEKS = 7;
 const TOTAL_WEEKS = 9;
 
+// "YYYY-MM-DD" phải được parse theo giờ local, không phải qua new Date(str) (bị hiểu
+// là UTC nên có thể lùi/tới 1 ngày tuỳ múi giờ trình duyệt, làm lệch ngày hiển thị).
+function parseLocalDate(dateStr: string): Date {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
 function getWeekMonday(semStart: string, weekNum: number): Date {
-    const d = new Date(semStart);
+    const d = parseLocalDate(semStart);
     d.setDate(d.getDate() + (weekNum - 1) * 7);
     return d;
 }
@@ -99,6 +117,9 @@ function getDayDate(monday: Date, dow: number): Date {
     const d = new Date(monday);
     d.setDate(d.getDate() + dow - 1);
     return d;
+}
+function toISODate(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function fmtDMY(d: Date): string {
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -124,7 +145,8 @@ function fmtCountdown(ms: number): string {
 // ═══════════════════════════════════════════════════════════════════
 
 export default function Home() {
-    const { auth, semesterId, semStart, subjects, schedule, onlineDays, tasks, notes, examData, isDemo } = usePage<PageProps>().props;
+    const { auth, semesterId, semStart, subjects, schedule, scheduleByDate, onlineByDate, onlineDays, tasks, notes, examData, isDemo } =
+        usePage<PageProps>().props;
     const user = auth.user;
 
     const [tab, setTab] = useState<TabId>('schedule');
@@ -135,7 +157,7 @@ export default function Home() {
     const [modal, setModal] = useState<ModalState>(null);
 
     const currentWeek = useMemo(() => {
-        const start = new Date(semStart);
+        const start = parseLocalDate(semStart);
         start.setHours(0, 0, 0, 0);
         const now = new Date();
         now.setHours(0, 0, 0, 0);
@@ -234,6 +256,8 @@ export default function Home() {
                         subjects={subjects}
                         subjectMap={subjectMap}
                         schedule={schedule}
+                        scheduleByDate={scheduleByDate}
+                        onlineByDate={onlineByDate}
                         onlineDays={onlineDays}
                         examData={examData}
                         notes={notes}
@@ -456,6 +480,8 @@ interface ScheduleTabProps {
     subjects: Subject[];
     subjectMap: Record<string, Subject>;
     schedule: Schedule;
+    scheduleByDate: ScheduleByDate;
+    onlineByDate: OnlineByDate;
     onlineDays: OnlineDays;
     examData: ExamData;
     notes: Notes;
@@ -470,6 +496,8 @@ function ScheduleTab({
     subjects,
     subjectMap,
     schedule,
+    scheduleByDate,
+    onlineByDate,
     onlineDays,
     examData,
     notes,
@@ -522,6 +550,8 @@ function ScheduleTab({
                     monday={monday}
                     subjectMap={subjectMap}
                     schedule={schedule}
+                    scheduleByDate={scheduleByDate}
+                    onlineByDate={onlineByDate}
                     onlineDays={onlineDays}
                     notes={notes}
                     openModal={openModal}
@@ -575,6 +605,8 @@ function StudyWeek({
     monday,
     subjectMap,
     schedule,
+    scheduleByDate,
+    onlineByDate,
     onlineDays,
     notes,
     openModal,
@@ -583,6 +615,8 @@ function StudyWeek({
     monday: Date;
     subjectMap: Record<string, Subject>;
     schedule: Schedule;
+    scheduleByDate: ScheduleByDate;
+    onlineByDate: OnlineByDate;
     onlineDays: OnlineDays;
     notes: Notes;
     openModal: (id: string) => void;
@@ -593,8 +627,14 @@ function StudyWeek({
             {[1, 2, 3, 4, 5].map((dow) => {
                 const date = getDayDate(monday, dow);
                 const today = isToday(date);
-                const online = onDays.includes(dow);
-                const slots = schedule[dow] || [];
+                const dateStr = toISODate(date);
+                // Có dữ liệu import cho đúng ngày này -> ưu tiên trạng thái online/offline
+                // suy ra từ phòng học thật; không thì dùng onlineDays lặp lại theo tuần (tạo tay).
+                const online = dateStr in onlineByDate ? onlineByDate[dateStr] : onDays.includes(dow);
+                // Buổi lặp lại hàng tuần (tạo tay) + buổi đúng ngày cụ thể (import .ics) của
+                // riêng ngày này, in chung lên 1 danh sách cho ô lịch của ngày đó.
+                const dated = scheduleByDate[dateStr] || [];
+                const items: { code: string; slotOrder?: number }[] = [...(schedule[dow] || []).map((code) => ({ code })), ...dated];
                 return (
                     <div key={dow} style={{ ...css.card, ...(today ? { border: '1px solid #FF6B3540', boxShadow: '0 0 20px #FF6B3310' } : {}) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -621,12 +661,12 @@ function StudyWeek({
                                 {online ? '🌐 Online' : '🏫 Offline'}
                             </span>
                         </div>
-                        {slots.length === 0 && <div style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>Không có lịch học</div>}
+                        {items.length === 0 && <div style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>Không có lịch học</div>}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                            {slots.map((sid, i) => {
-                                const sub = subjectMap[sid];
+                            {items.map((item, i) => {
+                                const sub = subjectMap[item.code];
                                 if (!sub) return null;
-                                const hasNote = !!(notes[sid] && notes[sid].trim());
+                                const hasNote = !!(notes[item.code] && notes[item.code].trim());
                                 return (
                                     <div
                                         key={i}
@@ -639,10 +679,10 @@ function StudyWeek({
                                     >
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                                             <span style={{ color: sub.color, fontWeight: 800, fontSize: 13 }}>{sub.name}</span>
-                                            <span style={{ fontSize: 9, color: '#555' }}>SLOT {i + 1}</span>
+                                            <span style={{ fontSize: 9, color: '#555' }}>SLOT {item.slotOrder ?? i + 1}</span>
                                         </div>
                                         <div style={{ fontSize: 11, color: '#888', marginBottom: 7 }}>{sub.full}</div>
-                                        <button style={css.smallBtn} onClick={() => openModal(`note:${sid}`)}>
+                                        <button style={css.smallBtn} onClick={() => openModal(`note:${item.code}`)}>
                                             {hasNote ? '📝 Xem ghi chú' : '➕ Thêm ghi chú'}
                                         </button>
                                     </div>

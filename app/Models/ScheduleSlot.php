@@ -14,11 +14,17 @@ class ScheduleSlot extends Model
         'subject_id',
         'day_of_week',
         'slot_order',
+        'class_date',
+        'start_time',
+        'end_time',
+        'is_online',
     ];
 
     protected $casts = [
         'day_of_week' => 'integer',
         'slot_order' => 'integer',
+        'class_date' => 'date',
+        'is_online' => 'boolean',
     ];
 
     public function subject(): BelongsTo

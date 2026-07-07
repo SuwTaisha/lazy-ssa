@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php test_parse.php)",
+      "Bash(php artisan *)"
+    ]
+  }
+}
