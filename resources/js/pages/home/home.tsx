@@ -297,7 +297,14 @@ export default function Home() {
                 <OnlineModal onlineDays={onlineDays} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
             )}
             {modal && modal.startsWith('note:') && semesterId && (
-                <NoteModal subjectId={modal.slice(5)} subjectMap={subjectMap} notes={notes} onClose={closeModal} showToast={showToast} />
+                <NoteModal
+                    subjectId={modal.slice(5)}
+                    subjectMap={subjectMap}
+                    notes={notes}
+                    semesterId={semesterId}
+                    onClose={closeModal}
+                    showToast={showToast}
+                />
             )}
 
             {toast && (
@@ -1185,12 +1192,14 @@ function NoteModal({
     subjectId,
     subjectMap,
     notes,
+    semesterId,
     onClose,
     showToast,
 }: {
     subjectId: string;
     subjectMap: Record<string, Subject>;
     notes: Notes;
+    semesterId: number;
     onClose: () => void;
     showToast: (msg: string) => void;
 }) {
@@ -1201,7 +1210,7 @@ function NoteModal({
     const saveNote = () => {
         setSaving(true);
         router.put(
-            `/subjects/${subjectId}/note`,
+            `/semesters/${semesterId}/subjects/${subjectId}/note`,
             { content: text },
             {
                 preserveScroll: true,

@@ -18,9 +18,8 @@ Route::middleware('auth')->group(function () {
     Route::patch('/tasks/{task}/toggle', [TaskController::class, 'toggle'])->name('tasks.toggle');
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
 
-    Route::put('/subjects/{subject}/note', [NoteController::class, 'update'])->name('notes.update');
-
     Route::put('/semesters/{semester}', [SemesterController::class, 'update'])->name('semesters.update');
+    Route::put('/semesters/{semester}/subjects/{code}/note', [NoteController::class, 'update'])->name('notes.update');
     Route::put('/semesters/{semester}/subjects', [SubjectController::class, 'sync'])->name('subjects.sync');
     Route::put('/semesters/{semester}/schedule', [ScheduleSlotController::class, 'sync'])->name('schedule.sync');
     Route::post('/semesters/{semester}/schedule/import', [ScheduleImportController::class, 'import'])->name('schedule.import');
