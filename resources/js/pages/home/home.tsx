@@ -69,6 +69,7 @@ interface PageProps {
     tasks: Task[];
     notes: Notes;
     examData: ExamData;
+    examWeeksCount: number;
     isDemo: boolean;
     [key: string]: unknown;
 }
@@ -98,7 +99,8 @@ const PRESET_COLORS = [
 const DAY_NAMES: Record<number, string> = { 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6' };
 const DAY_SHORT: Record<number, string> = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6' };
 const STUDY_WEEKS = 7;
-const TOTAL_WEEKS = 9;
+// Số tuần thi không còn cố định = 2 nữa — import lịch thi thật có thể trải dài hơn,
+// nên tổng số tuần (TOTAL_WEEKS = STUDY_WEEKS + examWeeksCount) được tính động từ server.
 
 // "YYYY-MM-DD" phải được parse theo giờ local, không phải qua new Date(str) (bị hiểu
 // là UTC nên có thể lùi/tới 1 ngày tuỳ múi giờ trình duyệt, làm lệch ngày hiển thị).
@@ -143,9 +145,10 @@ function fmtCountdown(ms: number): string {
 // ═══════════════════════════════════════════════════════════════════
 
 export default function Home() {
-    const { auth, semesterId, semStart, subjects, schedule, scheduleByDate, onlineDays, tasks, notes, examData, isDemo } =
+    const { auth, semesterId, semStart, subjects, schedule, scheduleByDate, onlineDays, tasks, notes, examData, examWeeksCount, isDemo } =
         usePage<PageProps>().props;
     const user = auth.user;
+    const totalWeeks = STUDY_WEEKS + examWeeksCount;
 
     const [tab, setTab] = useState<TabId>('schedule');
     const [weekView, setWeekView] = useState<number>(1);
@@ -160,8 +163,8 @@ export default function Home() {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         const diff = Math.floor((now.getTime() - start.getTime()) / (7 * 86400000)) + 1;
-        return Math.max(1, Math.min(TOTAL_WEEKS, diff));
-    }, [semStart]);
+        return Math.max(1, Math.min(totalWeeks, diff));
+    }, [semStart, totalWeeks]);
 
     useEffect(() => {
         setWeekView(currentWeek);
@@ -251,6 +254,7 @@ export default function Home() {
                         currentWeek={currentWeek}
                         weekView={weekView}
                         setWeekView={setWeekView}
+                        totalWeeks={totalWeeks}
                         subjects={subjects}
                         subjectMap={subjectMap}
                         schedule={schedule}
@@ -277,6 +281,7 @@ export default function Home() {
                         semStart={semStart}
                         semesterId={semesterId}
                         currentWeek={currentWeek}
+                        totalWeeks={totalWeeks}
                         openModal={openModal}
                         showToast={showToast}
                         isDemo={isDemo}
@@ -285,7 +290,14 @@ export default function Home() {
             </main>
 
             {modal === 'exam' && semesterId && (
-                <ExamModal examData={examData} subjects={subjects} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
+                <ExamModal
+                    examData={examData}
+                    subjects={subjects}
+                    semesterId={semesterId}
+                    examWeeksCount={examWeeksCount}
+                    onClose={closeModal}
+                    showToast={showToast}
+                />
             )}
             {modal === 'subjects' && semesterId && (
                 <SubjectsModal subjects={subjects} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
@@ -492,6 +504,7 @@ interface ScheduleTabProps {
     currentWeek: number;
     weekView: number;
     setWeekView: React.Dispatch<React.SetStateAction<number>>;
+    totalWeeks: number;
     subjects: Subject[];
     subjectMap: Record<string, Subject>;
     schedule: Schedule;
@@ -507,6 +520,7 @@ function ScheduleTab({
     currentWeek,
     weekView,
     setWeekView,
+    totalWeeks,
     subjects,
     subjectMap,
     schedule,
@@ -534,12 +548,12 @@ function ScheduleTab({
                         {fmtDMY(monday)} – {fmtDMY(getDayDate(monday, 5))}
                     </div>
                 </div>
-                <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.min(TOTAL_WEEKS, w + 1))}>
+                <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.min(totalWeeks, w + 1))}>
                     ›
                 </button>
             </div>
 
-            <WeekPills weekView={weekView} setWeekView={setWeekView} currentWeek={currentWeek} />
+            <WeekPills weekView={weekView} setWeekView={setWeekView} currentWeek={currentWeek} totalWeeks={totalWeeks} />
 
             {!isExam && (
                 <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
@@ -577,14 +591,16 @@ function WeekPills({
     weekView,
     setWeekView,
     currentWeek,
+    totalWeeks,
 }: {
     weekView: number;
     setWeekView: React.Dispatch<React.SetStateAction<number>>;
     currentWeek: number;
+    totalWeeks: number;
 }) {
     return (
         <div style={{ display: 'flex', gap: 5, justifyContent: 'center', flexWrap: 'wrap' }}>
-            {Array.from({ length: TOTAL_WEEKS }, (_, i) => i + 1).map((w) => {
+            {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((w) => {
                 const isActive = w === weekView;
                 const isCurrent = w === currentWeek;
                 const isExam = w > STUDY_WEEKS;
@@ -1047,6 +1063,7 @@ function SettingsTab({
     semStart,
     semesterId,
     currentWeek,
+    totalWeeks,
     openModal,
     showToast,
     isDemo,
@@ -1054,6 +1071,7 @@ function SettingsTab({
     semStart: string;
     semesterId?: number;
     currentWeek: number;
+    totalWeeks: number;
     openModal: (id: string) => void;
     showToast: (msg: string) => void;
     isDemo: boolean;
@@ -1116,7 +1134,7 @@ function SettingsTab({
             <div style={css.card}>
                 <div style={css.cardTitle}>📊 Tiến Độ Học Kỳ</div>
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
-                    {Array.from({ length: TOTAL_WEEKS }, (_, i) => i + 1).map((w) => {
+                    {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((w) => {
                         const isExam = w > STUDY_WEEKS;
                         const isCur = w === currentWeek;
                         const isPast = w < currentWeek;
@@ -1258,22 +1276,36 @@ function ExamModal({
     examData,
     subjects,
     semesterId,
+    examWeeksCount,
     onClose,
     showToast,
 }: {
     examData: ExamData;
     subjects: Subject[];
     semesterId: number;
+    examWeeksCount: number;
     onClose: () => void;
     showToast: (msg: string) => void;
 }) {
     const [local, setLocal] = useState<ExamData>(() => JSON.parse(JSON.stringify(examData)));
     const [activeW, setActiveW] = useState<number>(STUDY_WEEKS + 1);
     const [saving, setSaving] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [manualAdds, setManualAdds] = useState<Set<string>>(new Set());
+    const [addSubId, setAddSubId] = useState('');
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const update = (subId: string, field: keyof ExamEntry, val: string) => {
         const key = `w${activeW}_${subId}`;
         setLocal((prev) => ({ ...prev, [key]: { ...prev[key], [field]: val } }));
+    };
+
+    const addSubjectToWeek = () => {
+        if (!addSubId) return;
+        const key = `w${activeW}_${addSubId}`;
+        setManualAdds((prev) => new Set(prev).add(key));
+        setLocal((prev) => (prev[key] ? prev : { ...prev, [key]: { date: '', time: '', room: '', type: '' } }));
+        setAddSubId('');
     };
 
     const saveExam = () => {
@@ -1285,6 +1317,24 @@ function ExamModal({
                 onClose();
             },
             onFinish: () => setSaving(false),
+        });
+    };
+
+    const importIcs = (file: File) => {
+        const form = new FormData();
+        form.append('ics_file', file);
+        setImporting(true);
+        router.post(`/semesters/${semesterId}/exam-entries/import`, form, {
+            preserveScroll: true,
+            onSuccess: () => {
+                showToast('✅ Đã nhập lịch thi từ file .ics!');
+                onClose();
+            },
+            onError: (errors) => showToast(`❌ ${errors.ics_file || 'Không thể nhập file .ics'}`),
+            onFinish: () => {
+                setImporting(false);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            },
         });
     };
 
@@ -1307,13 +1357,40 @@ function ExamModal({
                 </>
             }
         >
-            <div style={{ display: 'flex', borderBottom: '1px solid #ffffff0f', margin: '-12px -16px 0', padding: '0 16px' }}>
-                {[STUDY_WEEKS + 1, STUDY_WEEKS + 2].map((w) => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1a1a32', borderRadius: 10, padding: '10px 12px' }}>
+                <span style={{ fontSize: 12, color: '#999', flex: 1 }}>Nhập lịch thi tự động từ file .ics</span>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".ics"
+                    style={{ display: 'none' }}
+                    onChange={(e) => e.target.files?.[0] && importIcs(e.target.files[0])}
+                />
+                <button
+                    style={{ ...css.smallBtn, opacity: importing ? 0.6 : 1 }}
+                    disabled={importing}
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    📥 {importing ? 'Đang nhập...' : 'Nhập file .ics'}
+                </button>
+            </div>
+
+            <div
+                style={{
+                    display: 'flex',
+                    overflowX: 'auto',
+                    borderBottom: '1px solid #ffffff0f',
+                    margin: '0 -16px 0',
+                    padding: '0 16px',
+                }}
+            >
+                {Array.from({ length: examWeeksCount }, (_, i) => STUDY_WEEKS + 1 + i).map((w) => (
                     <button
                         key={w}
                         onClick={() => setActiveW(w)}
                         style={{
-                            flex: 1,
+                            flex: '0 0 auto',
+                            minWidth: 84,
                             padding: '9px',
                             background: 'none',
                             border: 'none',
@@ -1328,33 +1405,90 @@ function ExamModal({
                     </button>
                 ))}
             </div>
-            {subjects.map((sub) => {
-                const key = `w${activeW}_${sub.id}`;
-                const exam = local[key] || {};
+            {(() => {
+                const hasExam = (sub: Subject) => {
+                    const key = `w${activeW}_${sub.id}`;
+                    if (manualAdds.has(key)) return true;
+                    const exam = local[key];
+                    return !!exam && (exam.date || exam.time || exam.room || exam.type);
+                };
+                const subjectsWithExam = subjects.filter(hasExam);
+                const availableToAdd = subjects.filter((s) => !hasExam(s));
+
                 return (
-                    <div key={sub.id} style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${sub.color}` }}>
-                        <div style={{ color: sub.color, fontWeight: 700, marginBottom: 8 }}>{sub.name}</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                            {(
-                                [
-                                    ['date', 'Ngày thi'],
-                                    ['time', 'Giờ thi'],
-                                    ['room', 'Phòng thi'],
-                                    ['type', 'Hình thức'],
-                                ] as [keyof ExamEntry, string][]
-                            ).map(([f, ph]) => (
-                                <input
-                                    key={f}
-                                    placeholder={ph}
-                                    value={exam[f] || ''}
-                                    onChange={(e) => update(sub.id, f, e.target.value)}
-                                    style={{ ...css.input, fontSize: 11 }}
-                                />
-                            ))}
-                        </div>
-                    </div>
+                    <>
+                        {availableToAdd.length > 0 && (
+                            <div style={{ display: 'flex', gap: 6 }}>
+                                <select value={addSubId} onChange={(e) => setAddSubId(e.target.value)} style={{ ...css.select, flex: 1 }}>
+                                    <option value="">+ Thêm môn thi vào tuần này...</option>
+                                    {availableToAdd.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.name} — {s.full}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button style={css.smallBtn} onClick={addSubjectToWeek} disabled={!addSubId}>
+                                    ➕
+                                </button>
+                            </div>
+                        )}
+                        {subjectsWithExam.length === 0 && (
+                            <div style={{ textAlign: 'center', color: '#666', fontSize: 12, padding: '16px 0' }}>
+                                Chưa có môn nào thi trong tuần này
+                            </div>
+                        )}
+                        {subjectsWithExam.map((sub) => {
+                            const key = `w${activeW}_${sub.id}`;
+                            const exam = local[key] || {};
+                            return (
+                                <div
+                                    key={sub.id}
+                                    style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${sub.color}` }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                                        <div style={{ color: sub.color, fontWeight: 700, flex: 1 }}>{sub.name}</div>
+                                        <button
+                                            style={{ ...css.smallBtn, padding: '2px 8px' }}
+                                            onClick={() => {
+                                                setLocal((prev) => {
+                                                    const next = { ...prev };
+                                                    delete next[key];
+                                                    return next;
+                                                });
+                                                setManualAdds((prev) => {
+                                                    const next = new Set(prev);
+                                                    next.delete(key);
+                                                    return next;
+                                                });
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                        {(
+                                            [
+                                                ['date', 'Ngày thi'],
+                                                ['time', 'Giờ thi'],
+                                                ['room', 'Phòng thi'],
+                                                ['type', 'Hình thức'],
+                                            ] as [keyof ExamEntry, string][]
+                                        ).map(([f, ph]) => (
+                                            <input
+                                                key={f}
+                                                placeholder={ph}
+                                                value={exam[f] || ''}
+                                                onChange={(e) => update(sub.id, f, e.target.value)}
+                                                style={{ ...css.input, fontSize: 11 }}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </>
                 );
-            })}
+            })()}
         </ModalShell>
     );
 }

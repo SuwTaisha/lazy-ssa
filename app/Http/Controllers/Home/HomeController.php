@@ -27,6 +27,7 @@ class HomeController extends Controller
                 'tasks' => [],
                 'notes' => (object) [],
                 'examData' => (object) [],
+                'examWeeksCount' => 2,
                 'isDemo' => true,
             ]);
         }
@@ -121,6 +122,7 @@ class HomeController extends Controller
         }
 
         $examData = [];
+        $maxExamWeek = null;
         foreach ($semester->subjects as $subject) {
             foreach ($subject->examEntries as $exam) {
                 $examData["w{$exam->week_number}_{$subject->code}"] = [
@@ -129,8 +131,12 @@ class HomeController extends Controller
                     'room' => $exam->room,
                     'type' => $exam->type,
                 ];
+                $maxExamWeek = max($maxExamWeek ?? $exam->week_number, $exam->week_number);
             }
         }
+        // Mặc định 2 tuần thi (đúng UI cũ); nếu import .ics tạo lịch thi trải dài hơn thì
+        // mở thêm tuần thi cho đủ, không giới hạn cứng ở 2 tuần nữa.
+        $examWeeksCount = $maxExamWeek !== null ? max(2, $maxExamWeek - self::STUDY_WEEKS) : 2;
 
         return Inertia::render('home/home', [
             'semesterId' => $semester->id,
@@ -142,6 +148,7 @@ class HomeController extends Controller
             'tasks' => $tasks,
             'notes' => (object) $notes,
             'examData' => (object) $examData,
+            'examWeeksCount' => $examWeeksCount,
             'isDemo' => false,
         ]);
     }

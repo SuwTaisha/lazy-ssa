@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Examentry\ExamEntryController;
+use App\Http\Controllers\ExamEntry\ExamEntryImportController;
 use App\Http\Controllers\Home\HomeController;
 use App\Http\Controllers\Note\NoteController;
 use App\Http\Controllers\Online\OnlineDayController;
@@ -25,6 +26,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/semesters/{semester}/schedule/import', [ScheduleImportController::class, 'import'])->name('schedule.import');
     Route::put('/semesters/{semester}/online-days', [OnlineDayController::class, 'sync'])->name('online-days.sync');
     Route::put('/semesters/{semester}/exam-entries', [ExamEntryController::class, 'sync'])->name('exam-entries.sync');
+    Route::post('/semesters/{semester}/exam-entries/import', [ExamEntryImportController::class, 'import'])->name('exam-entries.import');
 });
 
 require __DIR__.'/auth.php';
