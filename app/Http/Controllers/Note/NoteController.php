@@ -26,4 +26,15 @@ class NoteController extends Controller
 
         return back();
     }
+
+    public function destroy(Request $request, Semester $semester, string $code): RedirectResponse
+    {
+        abort_unless($semester->user_id === $request->user()->id, 403);
+
+        $subject = $semester->subjects()->where('code', $code)->firstOrFail();
+
+        $subject->note()->delete();
+
+        return back();
+    }
 }

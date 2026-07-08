@@ -28,6 +28,7 @@ class HomeController extends Controller
                 'onlineDays' => $this->demoOnlineDays(),
                 'tasks' => [],
                 'notes' => (object) [],
+                'noteDates' => (object) [],
                 'dayNotes' => (object) [],
                 'examData' => (object) [],
                 'examWeeksCount' => 2,
@@ -137,10 +138,14 @@ class HomeController extends Controller
             'createdAt' => $t->created_at->toIso8601String(),
         ])->values();
 
+        // noteDates: ngày ghi chú của môn được sửa lần cuối -> dùng để gộp chung với ghi
+        // chú theo ngày trong mục "Ghi Chú" (chỉ tách nhóm theo ngày, không theo loại).
         $notes = [];
+        $noteDates = [];
         foreach ($semester->subjects as $subject) {
             if ($subject->note) {
                 $notes[$subject->code] = $subject->note->content;
+                $noteDates[$subject->code] = $subject->note->updated_at->toDateString();
             }
         }
 
@@ -186,6 +191,7 @@ class HomeController extends Controller
             'onlineDays' => $onlineDays,
             'tasks' => $tasks,
             'notes' => (object) $notes,
+            'noteDates' => (object) $noteDates,
             'dayNotes' => (object) $dayNotes,
             'examData' => (object) $examData,
             'examWeeksCount' => $examWeeksCount,

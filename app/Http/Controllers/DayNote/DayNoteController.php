@@ -25,4 +25,14 @@ class DayNoteController extends Controller
 
         return back();
     }
+
+    public function destroy(Request $request, Semester $semester, string $date): RedirectResponse
+    {
+        abort_unless($semester->user_id === $request->user()->id, 403);
+        abort_unless((bool) strtotime($date), 404);
+
+        $semester->dayNotes()->where('date', $date)->delete();
+
+        return back();
+    }
 }

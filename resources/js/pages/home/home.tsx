@@ -103,6 +103,7 @@ interface Task {
 
 type Notes = Record<string, string>; // subjectCode -> note text
 type DayNotes = Record<string, string>; // 'YYYY-MM-DD' -> note text riêng của ngày đó
+type NoteDates = Record<string, string>; // subjectCode -> 'YYYY-MM-DD' lần sửa ghi chú gần nhất
 
 interface FeedbackItem {
     id: number;
@@ -135,6 +136,7 @@ interface PageProps {
     onlineDays: OnlineDays;
     tasks: Task[];
     notes: Notes;
+    noteDates: NoteDates;
     dayNotes: DayNotes;
     examData: ExamData;
     examWeeksCount: number;
@@ -245,6 +247,7 @@ export default function Home() {
         onlineDays,
         tasks,
         notes,
+        noteDates,
         dayNotes,
         examData,
         examWeeksCount,
@@ -454,8 +457,11 @@ export default function Home() {
                         onlineDays={onlineDays}
                         examData={examData}
                         notes={notes}
+                        noteDates={noteDates}
                         dayNotes={dayNotes}
+                        semesterId={semesterId}
                         openModal={openModal}
+                        showToast={showToast}
                     />
                 )}
                 {tab === 'tasks' && (
@@ -729,8 +735,11 @@ interface ScheduleTabProps {
     onlineDays: OnlineDays;
     examData: ExamData;
     notes: Notes;
+    noteDates: NoteDates;
     dayNotes: DayNotes;
+    semesterId?: number;
     openModal: (id: string) => void;
+    showToast: (msg: string) => void;
 }
 
 function ScheduleTab({
@@ -746,8 +755,11 @@ function ScheduleTab({
     onlineDays,
     examData,
     notes,
+    noteDates,
     dayNotes,
+    semesterId,
     openModal,
+    showToast,
 }: ScheduleTabProps) {
     const monday = getWeekMonday(semStart, weekView);
     const isExam = weekView > STUDY_WEEKS;
@@ -783,7 +795,7 @@ function ScheduleTab({
             </div>
 
             {viewMode === 'week' ? (
-                <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, width: '100%', maxWidth: 1100, margin: '0 auto' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.max(1, w - 1))}>
                             <ChevronLeft size={16} strokeWidth={2.4} />
@@ -840,7 +852,7 @@ function ScheduleTab({
                             openModal={openModal}
                         />
                     )}
-                </>
+                </div>
             ) : (
                 <CalendarView
                     semStart={semStart}
@@ -853,7 +865,15 @@ function ScheduleTab({
                 />
             )}
 
-            <ScheduleNotesOverview subjects={subjects} notes={notes} dayNotes={dayNotes} openModal={openModal} />
+            <ScheduleNotesOverview
+                subjects={subjects}
+                notes={notes}
+                noteDates={noteDates}
+                dayNotes={dayNotes}
+                semesterId={semesterId}
+                openModal={openModal}
+                showToast={showToast}
+            />
         </div>
     );
 }
@@ -861,60 +881,163 @@ function ScheduleTab({
 function ScheduleNotesOverview({
     subjects,
     notes,
+    noteDates,
     dayNotes,
+    semesterId,
     openModal,
+    showToast,
 }: {
     subjects: Subject[];
     notes: Notes;
+    noteDates: NoteDates;
     dayNotes: DayNotes;
+    semesterId?: number;
     openModal: (id: string) => void;
+    showToast: (msg: string) => void;
 }) {
-    const dayEntries = Object.entries(dayNotes)
-        .filter(([, v]) => v && v.trim())
-        .sort((a, b) => b[0].localeCompare(a[0]));
-    const subjectEntries = subjects.filter((s) => notes[s.id] && notes[s.id].trim());
+    // Chỉ tách nhóm theo NGÀY (không tách riêng "theo ngày" / "theo môn" như trước) —
+    // ghi chú ngày và ghi chú môn có cùng ngày (ngày sửa gần nhất của ghi chú môn) được
+    // gộp chung 1 khối. Ngày gần nhất (hôm nay trở đi) lên trước; ngày đã qua đẩy xuống
+    // dưới cùng (gần nhất trong quá khứ đứng đầu nhóm quá khứ).
+    const groups: Record<string, { dayNote?: string; subjectItems: Subject[] }> = {};
 
-    if (dayEntries.length === 0 && subjectEntries.length === 0) return null;
+    Object.entries(dayNotes).forEach(([date, content]) => {
+        if (!content || !content.trim()) return;
+        if (!groups[date]) groups[date] = { subjectItems: [] };
+        groups[date].dayNote = content;
+    });
+    subjects.forEach((s) => {
+        const content = notes[s.id];
+        const date = noteDates[s.id];
+        if (!content || !content.trim() || !date) return;
+        if (!groups[date]) groups[date] = { subjectItems: [] };
+        groups[date].subjectItems.push(s);
+    });
 
-    const rowStyle = (accent: string): React.CSSProperties => ({
+    const todayStr = toISODate(new Date());
+    const allDates = Object.keys(groups);
+    const upcomingDates = allDates.filter((d) => d >= todayStr).sort((a, b) => a.localeCompare(b));
+    const pastDates = allDates.filter((d) => d < todayStr).sort((a, b) => b.localeCompare(a));
+    const orderedDates = [...upcomingDates, ...pastDates];
+
+    if (orderedDates.length === 0) return null;
+
+    const deleteDayNote = (date: string) => {
+        if (!semesterId) return;
+        router.delete(`/semesters/${semesterId}/day-notes/${date}`, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => showToast('🗑 Đã xoá ghi chú'),
+        });
+    };
+    const deleteSubjectNote = (code: string) => {
+        if (!semesterId) return;
+        router.delete(`/semesters/${semesterId}/subjects/${code}/note`, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => showToast('🗑 Đã xoá ghi chú'),
+        });
+    };
+
+    const gridStyle: React.CSSProperties = {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+        gap: 10,
+        alignItems: 'start',
+    };
+    const groupCardStyle: React.CSSProperties = {
         display: 'flex',
         flexDirection: 'column',
-        gap: 2,
-        textAlign: 'left',
+        gap: 8,
+        background: 'var(--home-card)',
+        border: '1px solid var(--home-border)',
+        borderRadius: 12,
+        padding: '10px 12px',
+    };
+    const itemRowStyle = (accent: string): React.CSSProperties => ({
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 6,
         background: 'var(--home-input)',
         border: '1px solid var(--home-border)',
         borderLeft: `3px solid ${accent}`,
         borderRadius: 8,
-        padding: '8px 10px',
-        cursor: 'pointer',
+        padding: '7px 9px',
     });
+    const labelStyle = (accent: string): React.CSSProperties => ({ fontSize: 10, fontWeight: 700, color: accent });
     const snippetStyle: React.CSSProperties = {
         fontSize: 11,
         color: 'var(--home-text-soft)',
+        marginTop: 3,
+        lineHeight: 1.5,
+        display: '-webkit-box',
+        WebkitBoxOrient: 'vertical',
+        WebkitLineClamp: 3,
         overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
+    };
+    const deleteBtnStyle: React.CSSProperties = {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        background: 'none',
+        border: 'none',
+        color: 'var(--home-text-faint)',
+        cursor: 'pointer',
+        padding: 2,
     };
 
     return (
-        <div style={css.card}>
+        <div style={{ ...css.card, maxWidth: 1100, width: '100%', margin: '0 auto' }}>
             <div style={css.cardTitle}>
                 <NotebookPen size={15} strokeWidth={2.4} /> Ghi Chú
             </div>
-            {dayEntries.map(([date, content]) => (
-                <button key={date} onClick={() => openModal(`day:${date}`)} style={rowStyle('#FF6B35')}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#FF6B35' }}>
-                        <CalendarDays size={11} strokeWidth={2.4} /> {fmtDMY(parseLocalDate(date))}
-                    </div>
-                    <div style={snippetStyle}>{content}</div>
-                </button>
-            ))}
-            {subjectEntries.map((s) => (
-                <button key={s.id} onClick={() => openModal(`note:${s.id}`)} style={rowStyle(s.color)}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: s.color }}>{s.name}</div>
-                    <div style={snippetStyle}>{notes[s.id]}</div>
-                </button>
-            ))}
+            <div style={gridStyle}>
+                {orderedDates.map((date) => {
+                    const group = groups[date];
+                    const isPast = date < todayStr;
+                    return (
+                        <div key={date} style={{ ...groupCardStyle, opacity: isPast ? 0.6 : 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--home-text-dim)' }}>
+                                <CalendarDays size={12} strokeWidth={2.4} />
+                                {parseLocalDate(date).toLocaleDateString('vi-VN', {
+                                    weekday: 'long',
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                })}
+                                {isPast && <span style={{ fontWeight: 600, color: 'var(--home-text-faint)' }}> (đã qua)</span>}
+                            </div>
+
+                            {group.dayNote && (
+                                <div style={itemRowStyle('#FF6B35')}>
+                                    <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => openModal(`day:${date}`)}>
+                                        <div style={labelStyle('#FF6B35')}>Ghi chú ngày</div>
+                                        <div style={snippetStyle}>{group.dayNote}</div>
+                                    </div>
+                                    <button title="Xoá ghi chú" style={deleteBtnStyle} onClick={() => deleteDayNote(date)}>
+                                        <Trash2 size={13} strokeWidth={2.2} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {group.subjectItems.map((s) => (
+                                <div key={s.id} style={itemRowStyle(s.color)}>
+                                    <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => openModal(`note:${s.id}`)}>
+                                        <div style={labelStyle(s.color)}>
+                                            Môn: {s.name} — {s.full}
+                                        </div>
+                                        <div style={snippetStyle}>{notes[s.id]}</div>
+                                    </div>
+                                    <button title="Xoá ghi chú" style={deleteBtnStyle} onClick={() => deleteSubjectNote(s.id)}>
+                                        <Trash2 size={13} strokeWidth={2.2} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
@@ -1292,6 +1415,110 @@ function CalendarView({
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// SUBJECT COMBOBOX (dropdown môn học có ô tìm kiếm)
+// ═══════════════════════════════════════════════════════════════════
+
+function SubjectCombobox({
+    subjects,
+    value,
+    onChange,
+}: {
+    subjects: Subject[];
+    value: string;
+    onChange: (id: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const wrapRef = React.useRef<HTMLDivElement>(null);
+
+    const selected = subjects.find((s) => s.id === value);
+    const q = query.trim().toLowerCase();
+    const filtered = q ? subjects.filter((s) => s.name.toLowerCase().includes(q) || s.full.toLowerCase().includes(q)) : subjects;
+
+    return (
+        <div
+            ref={wrapRef}
+            style={{ position: 'relative' }}
+            onBlur={(e) => {
+                if (!wrapRef.current?.contains(e.relatedTarget as Node)) {
+                    setOpen(false);
+                    setQuery('');
+                }
+            }}
+        >
+            <div style={{ position: 'relative' }}>
+                <Search
+                    size={13}
+                    strokeWidth={2.2}
+                    style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--home-text-faint)', pointerEvents: 'none' }}
+                />
+                <input
+                    value={open ? query : selected ? `${selected.name} — ${selected.full}` : ''}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onFocus={() => {
+                        setOpen(true);
+                        setQuery('');
+                    }}
+                    onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
+                    placeholder="Tìm môn học..."
+                    style={{ ...css.input, paddingLeft: 30 }}
+                />
+            </div>
+            {open && (
+                <div
+                    onMouseDown={(e) => e.preventDefault()}
+                    style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        marginTop: 4,
+                        background: 'var(--home-card)',
+                        border: '1px solid var(--home-border-strong)',
+                        borderRadius: 10,
+                        boxShadow: '0 10px 30px var(--home-shadow)',
+                        maxHeight: 220,
+                        overflowY: 'auto',
+                        zIndex: 20,
+                    }}
+                >
+                    {filtered.length === 0 && (
+                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--home-text-faint)' }}>Không tìm thấy môn học</div>
+                    )}
+                    {filtered.map((s) => (
+                        <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                                onChange(s.id);
+                                setOpen(false);
+                                setQuery('');
+                            }}
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 1,
+                                width: '100%',
+                                textAlign: 'left',
+                                background: s.id === value ? 'var(--home-input)' : 'transparent',
+                                border: 'none',
+                                borderLeft: `3px solid ${s.color}`,
+                                padding: '8px 10px',
+                                cursor: 'pointer',
+                                fontSize: 12,
+                            }}
+                        >
+                            <span style={{ fontWeight: 700, color: s.color }}>{s.name}</span>
+                            <span style={{ fontSize: 10, color: 'var(--home-text-faint)' }}>{s.full}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // TASKS TAB (mutation qua router thay vì setState)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -1359,13 +1586,7 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, fontSize: 14, color: '#FF6B35', marginBottom: 6 }}>
                     <Plus size={14} strokeWidth={2.6} /> Thêm Nhiệm Vụ
                 </div>
-                <select value={newSub} onChange={(e) => setNewSub(e.target.value)} style={css.select}>
-                    {subjects.map((s) => (
-                        <option key={s.id} value={s.id}>
-                            {s.name} — {s.full}
-                        </option>
-                    ))}
-                </select>
+                <SubjectCombobox subjects={subjects} value={newSub} onChange={setNewSub} />
                 <input
                     value={newText}
                     onChange={(e) => setNewText(e.target.value)}
@@ -1773,6 +1994,20 @@ function NoteModal({
     const sub = subjectMap[subjectId] || { color: 'var(--home-text-dim)', name: subjectId, full: '', id: subjectId };
     const [text, setText] = useState<string>(notes[subjectId] || '');
     const [saving, setSaving] = useState(false);
+    const hasExistingNote = !!(notes[subjectId] && notes[subjectId].trim());
+
+    const deleteNote = () => {
+        setSaving(true);
+        router.delete(`/semesters/${semesterId}/subjects/${subjectId}/note`, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                showToast('🗑 Đã xoá ghi chú');
+                onClose();
+            },
+            onFinish: () => setSaving(false),
+        });
+    };
 
     const saveNote = () => {
         if (!text.trim()) {
@@ -1810,6 +2045,26 @@ function NoteModal({
             onClose={onClose}
             footer={
                 <>
+                    {hasExistingNote && (
+                        <button
+                            title="Xoá ghi chú"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: '#EF444418',
+                                border: '1px solid #EF444430',
+                                color: '#EF4444',
+                                borderRadius: 8,
+                                padding: '0 12px',
+                                cursor: 'pointer',
+                            }}
+                            onClick={deleteNote}
+                            disabled={saving}
+                        >
+                            <Trash2 size={14} strokeWidth={2.2} />
+                        </button>
+                    )}
                     <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
                         Hủy
                     </button>
@@ -2565,6 +2820,20 @@ function DayActionsModal({
         );
     };
 
+    const deleteNote = () => {
+        if (!semesterId) return;
+        setSaving(true);
+        router.delete(`/semesters/${semesterId}/day-notes/${dateStr}`, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                showToast('🗑 Đã xoá ghi chú');
+                onClose();
+            },
+            onFinish: () => setSaving(false),
+        });
+    };
+
     const saveSlot = () => {
         if (!semesterId || !slotSubject) return;
         setSaving(true);
@@ -2614,13 +2883,35 @@ function DayActionsModal({
                         <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu slot'}
                     </button>
                 ) : step === 'note' ? (
-                    <button
-                        style={{ ...css.primaryBtn, flex: 1, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
-                        onClick={saveNote}
-                        disabled={saving}
-                    >
-                        <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu ghi chú'}
-                    </button>
+                    <>
+                        {existingNote && (
+                            <button
+                                title="Xoá ghi chú"
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    background: '#EF444418',
+                                    border: '1px solid #EF444430',
+                                    color: '#EF4444',
+                                    borderRadius: 8,
+                                    padding: '0 12px',
+                                    cursor: 'pointer',
+                                }}
+                                onClick={deleteNote}
+                                disabled={saving}
+                            >
+                                <Trash2 size={14} strokeWidth={2.2} />
+                            </button>
+                        )}
+                        <button
+                            style={{ ...css.primaryBtn, flex: 1, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                            onClick={saveNote}
+                            disabled={saving}
+                        >
+                            <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu ghi chú'}
+                        </button>
+                    </>
                 ) : undefined
             }
         >

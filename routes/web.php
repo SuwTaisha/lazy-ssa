@@ -24,7 +24,9 @@ Route::middleware('auth')->group(function () {
 
     Route::put('/semesters/{semester}', [SemesterController::class, 'update'])->name('semesters.update');
     Route::put('/semesters/{semester}/subjects/{code}/note', [NoteController::class, 'update'])->name('notes.update');
+    Route::delete('/semesters/{semester}/subjects/{code}/note', [NoteController::class, 'destroy'])->name('notes.destroy');
     Route::put('/semesters/{semester}/day-notes/{date}', [DayNoteController::class, 'update'])->name('day-notes.update');
+    Route::delete('/semesters/{semester}/day-notes/{date}', [DayNoteController::class, 'destroy'])->name('day-notes.destroy');
     Route::put('/semesters/{semester}/subjects', [SubjectController::class, 'sync'])->name('subjects.sync');
     Route::put('/semesters/{semester}/subjects/{code}/schedule-slots', [ScheduleSlotController::class, 'update'])->name('schedule-slots.update');
     Route::delete('/semesters/{semester}/schedule-slots', [ScheduleSlotController::class, 'destroyAll'])->name('schedule-slots.destroy-all');
