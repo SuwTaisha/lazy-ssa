@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\ExamEntry;
 
 use App\Http\Controllers\Controller;
+use App\Models\ExamEntry;
 use App\Models\Semester;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class ExamEntryController extends Controller
 {
@@ -17,8 +18,25 @@ class ExamEntryController extends Controller
     {
         abort_unless($semester->user_id === $request->user()->id, 403);
 
+        // Ô trống trên form gửi lên là chuỗi rỗng "" chứ không phải null — cần đổi thành
+        // null trước khi validate để 'nullable' thực sự bỏ qua các rule format bên dưới
+        // (nullable của Laravel chỉ bỏ qua rule khi giá trị là null, không phải "").
+        $examData = $request->input('examData', []);
+        foreach ($examData as $key => $entry) {
+            foreach (['date', 'time', 'room', 'type'] as $field) {
+                if (($entry[$field] ?? null) === '') {
+                    $examData[$key][$field] = null;
+                }
+            }
+        }
+        $request->merge(['examData' => $examData]);
+
         $data = $request->validate([
             'examData' => ['required', 'array'],
+            'examData.*.date' => ['nullable', 'date'],
+            'examData.*.time' => ['nullable', 'date_format:H:i'],
+            'examData.*.room' => ['nullable', 'string', 'max:100'],
+            'examData.*.type' => ['nullable', 'string', 'max:100'],
         ]);
 
         $subjectIdByCode = $semester->subjects()->pluck('id', 'code');
@@ -34,7 +52,7 @@ class ExamEntryController extends Controller
                 continue;
             }
 
-            \App\Models\ExamEntry::updateOrCreate(
+            ExamEntry::updateOrCreate(
                 ['subject_id' => $subjectIdByCode[$code], 'week_number' => (int) $week],
                 [
                     'exam_date' => $entry['date'] ?? null,

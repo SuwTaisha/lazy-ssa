@@ -117,7 +117,6 @@ const PRESET_COLORS = [
 ];
 
 const DAY_NAMES: Record<number, string> = { 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6' };
-const DAY_SHORT: Record<number, string> = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6' };
 const STUDY_WEEKS = 7;
 // Số tuần thi không còn cố định = 2 nữa — import lịch thi thật có thể trải dài hơn,
 // nên tổng số tuần (TOTAL_WEEKS = STUDY_WEEKS + examWeeksCount) được tính động từ server.
@@ -444,9 +443,6 @@ export default function Home() {
                     onClose={closeModal}
                     showToast={showToast}
                 />
-            )}
-            {modal === 'online' && semesterId && (
-                <OnlineModal onlineDays={onlineDays} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
             )}
             {modal && modal.startsWith('note:') && semesterId && (
                 <NoteModal
@@ -1229,6 +1225,10 @@ function SettingsTab({
             showToast('🔐 Đăng nhập để chỉnh ngày bắt đầu học kỳ');
             return;
         }
+        if (!dateStr) {
+            showToast('⚠️ Vui lòng chọn một ngày hợp lệ');
+            return;
+        }
         router.put(
             `/semesters/${semesterId}`,
             { start_date: dateStr },
@@ -1260,7 +1260,6 @@ function SettingsTab({
                 {[
                     { icon: '📚', label: 'Quản lý môn học', sub: 'Thêm, sửa, xóa, đổi màu môn', id: 'subjects' },
                     { icon: '🗓', label: 'Lịch học theo ngày', sub: 'Chỉnh slot môn cho từng thứ', id: 'schedule' },
-                    { icon: '🌐', label: 'Lịch Online / Offline', sub: 'Tuỳ chỉnh từng ngày trong từng tuần', id: 'online' },
                 ].map((item) => (
                     <button
                         key={item.id}
@@ -1383,6 +1382,14 @@ function NoteModal({
     const [saving, setSaving] = useState(false);
 
     const saveNote = () => {
+        if (!text.trim()) {
+            showToast('⚠️ Ghi chú không được để trống');
+            return;
+        }
+        if (text.length > 20000) {
+            showToast('⚠️ Ghi chú quá dài (tối đa 20.000 ký tự)');
+            return;
+        }
         setSaving(true);
         router.put(
             `/semesters/${semesterId}/subjects/${subjectId}/note`,
@@ -1394,6 +1401,7 @@ function NoteModal({
                     showToast('✅ Đã lưu ghi chú!');
                     onClose();
                 },
+                onError: () => showToast('❌ Không thể lưu ghi chú'),
                 onFinish: () => setSaving(false),
             },
         );
@@ -1628,15 +1636,17 @@ function ExamModal({
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                                         {(
                                             [
-                                                ['date', 'Ngày thi'],
-                                                ['time', 'Giờ thi'],
-                                                ['room', 'Phòng thi'],
-                                                ['type', 'Hình thức'],
-                                            ] as [keyof ExamEntry, string][]
-                                        ).map(([f, ph]) => (
+                                                ['date', 'Ngày thi', 'date'],
+                                                ['time', 'Giờ thi', 'time'],
+                                                ['room', 'Phòng thi', 'text'],
+                                                ['type', 'Hình thức', 'text'],
+                                            ] as [keyof ExamEntry, string, string][]
+                                        ).map(([f, ph, type]) => (
                                             <input
                                                 key={f}
+                                                type={type}
                                                 placeholder={ph}
+                                                maxLength={type === 'text' ? 100 : undefined}
                                                 value={exam[f] || ''}
                                                 onChange={(e) => update(sub.id, f, e.target.value)}
                                                 style={{ ...css.input, fontSize: 11 }}
@@ -1672,11 +1682,19 @@ function SubjectsModal({
 
     const updateField = (idx: number, field: keyof Subject, val: string) =>
         setLocal((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: val } : s)));
+    // "id" và "name" luôn phải giống nhau (cùng là mã môn) — sync cả 2 khi sửa ô "Mã môn",
+    // nếu không backend chỉ đọc "id" nên sửa mã môn ở đây sẽ không có tác dụng gì khi lưu.
+    const updateCode = (idx: number, val: string) =>
+        setLocal((prev) => prev.map((s, i) => (i === idx ? { ...s, id: val, name: val } : s)));
     const remove = (idx: number) => setLocal((prev) => prev.filter((_, i) => i !== idx));
 
     const addSubject = () => {
         const name = newName.trim().toUpperCase();
         if (!name) return;
+        if (!/^[A-Za-z0-9]+$/.test(name)) {
+            showToast('⚠️ Mã môn chỉ được chứa chữ và số');
+            return;
+        }
         if (local.find((s) => s.id === name)) {
             showToast('⚠️ Mã môn đã tồn tại!');
             return;
@@ -1687,6 +1705,27 @@ function SubjectsModal({
     };
 
     const saveSubjects = () => {
+        if (local.length === 0) {
+            showToast('⚠️ Cần ít nhất 1 môn học');
+            return;
+        }
+        const codeRe = /^[A-Za-z0-9]+$/;
+        for (const s of local) {
+            if (!s.id.trim() || !codeRe.test(s.id.trim())) {
+                showToast(`⚠️ Mã môn "${s.id || '(trống)'}" không hợp lệ (chỉ chữ và số)`);
+                return;
+            }
+            if (!s.full.trim()) {
+                showToast(`⚠️ Môn "${s.id}" thiếu tên đầy đủ`);
+                return;
+            }
+        }
+        const codes = local.map((s) => s.id.toUpperCase());
+        if (new Set(codes).size !== codes.length) {
+            showToast('⚠️ Có mã môn bị trùng lặp');
+            return;
+        }
+
         setSaving(true);
         router.put(`/semesters/${semesterId}/subjects`, asFormData({ subjects: local }), {
             preserveScroll: true,
@@ -1695,6 +1734,7 @@ function SubjectsModal({
                 showToast('✅ Đã lưu môn học!');
                 onClose();
             },
+            onError: () => showToast('❌ Không thể lưu môn học. Kiểm tra lại mã môn.'),
             onFinish: () => setSaving(false),
         });
     };
@@ -1723,7 +1763,8 @@ function SubjectsModal({
                     <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginBottom: 6 }}>
                         <input
                             value={sub.name}
-                            onChange={(e) => updateField(i, 'name', e.target.value)}
+                            onChange={(e) => updateCode(i, e.target.value.toUpperCase())}
+                            maxLength={20}
                             style={{ ...css.input, flex: 1, fontWeight: 700, fontSize: 13 }}
                             placeholder="Mã môn"
                         />
@@ -1838,6 +1879,10 @@ function ScheduleModal({
 
     const saveSessions = () => {
         if (!selectedCode) return;
+        if (sessions.some((s) => !s.classDate)) {
+            showToast('⚠️ Có buổi học chưa chọn ngày');
+            return;
+        }
         setSaving(true);
         const slots = sessions.map((s) => ({ class_date: s.classDate, slot: s.slot, is_online: s.isOnline }));
         router.put(`/semesters/${semesterId}/subjects/${selectedCode}/schedule-slots`, asFormData({ slots }), {
@@ -2022,111 +2067,6 @@ function ScheduleModal({
             >
                 🗑 {deletingAll ? 'Đang xoá...' : 'Xoá toàn bộ lịch học'}
             </button>
-        </ModalShell>
-    );
-}
-
-function OnlineModal({
-    onlineDays,
-    semesterId,
-    onClose,
-    showToast,
-}: {
-    onlineDays: OnlineDays;
-    semesterId: number;
-    onClose: () => void;
-    showToast: (msg: string) => void;
-}) {
-    const [local, setLocal] = useState<OnlineDays>(JSON.parse(JSON.stringify(onlineDays)));
-    const [saving, setSaving] = useState(false);
-
-    const toggle = (week: number, day: number) => {
-        setLocal((prev) => {
-            const cur = prev[week] || [];
-            const next = cur.includes(day) ? cur.filter((d) => d !== day) : [...cur, day].sort((a, b) => a - b);
-            return { ...prev, [week]: next };
-        });
-    };
-    const allOn = (w: number) => setLocal((prev) => ({ ...prev, [w]: [1, 2, 3, 4, 5] }));
-    const allOff = (w: number) => setLocal((prev) => ({ ...prev, [w]: [] }));
-
-    const saveOnline = () => {
-        setSaving(true);
-        router.put(`/semesters/${semesterId}/online-days`, asFormData({ onlineDays: local }), {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => {
-                showToast('✅ Đã lưu lịch Online/Offline!');
-                onClose();
-            },
-            onFinish: () => setSaving(false),
-        });
-    };
-
-    return (
-        <ModalShell
-            title="🌐 Lịch Online / Offline"
-            onClose={onClose}
-            footer={
-                <>
-                    <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
-                        Hủy
-                    </button>
-                    <button
-                        style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
-                        onClick={saveOnline}
-                        disabled={saving}
-                    >
-                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
-                    </button>
-                </>
-            }
-        >
-            <div style={{ fontSize: 11, color: 'var(--home-text-faint)' }}>Nhấn vào ngày để bật/tắt Online. Mặc định = Offline.</div>
-            {Array.from({ length: STUDY_WEEKS }, (_, i) => i + 1).map((w) => {
-                const online = local[w] || [];
-                return (
-                    <div key={w} style={{ background: 'var(--home-input)', borderRadius: 10, padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <span style={{ fontWeight: 700, fontSize: 13 }}>Tuần {w}</span>
-                            <div style={{ display: 'flex', gap: 5 }}>
-                                <button onClick={() => allOff(w)} style={{ ...css.smallBtn, fontSize: 9 }}>
-                                    All Offline
-                                </button>
-                                <button onClick={() => allOn(w)} style={{ ...css.smallBtn, fontSize: 9, color: '#00C6FF', borderColor: '#00C6FF28' }}>
-                                    All Online
-                                </button>
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 5 }}>
-                            {[1, 2, 3, 4, 5].map((day) => {
-                                const on = online.includes(day);
-                                return (
-                                    <button
-                                        key={day}
-                                        onClick={() => toggle(w, day)}
-                                        style={{
-                                            flex: 1,
-                                            padding: '7px 4px',
-                                            borderRadius: 8,
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            fontWeight: 700,
-                                            fontSize: 11,
-                                            lineHeight: 1.4,
-                                            background: on ? '#00C6FF' : 'var(--home-border-faint)',
-                                            color: on ? 'var(--home-bg)' : 'var(--home-text-faint)',
-                                        }}
-                                    >
-                                        <div>{DAY_SHORT[day]}</div>
-                                        <div style={{ fontSize: 9 }}>{on ? '🌐' : '🏫'}</div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                );
-            })}
         </ModalShell>
     );
 }

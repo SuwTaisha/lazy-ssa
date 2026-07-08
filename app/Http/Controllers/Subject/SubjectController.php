@@ -4,21 +4,20 @@ namespace App\Http\Controllers\Subject;
 
 use App\Http\Controllers\Controller;
 use App\Models\Semester;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class SubjectController extends Controller
 {
-
     public function sync(Request $request, Semester $semester): RedirectResponse
     {
         abort_unless($semester->user_id === $request->user()->id, 403);
 
         $data = $request->validate([
             'subjects' => ['required', 'array'],
-            'subjects.*.id' => ['required', 'string', 'max:20'],
+            'subjects.*.id' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'subjects.*.full' => ['required', 'string', 'max:255'],
-            'subjects.*.color' => ['required', 'string', 'max:9'],
+            'subjects.*.color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
         $incomingCodes = collect($data['subjects'])->pluck('id')->all();

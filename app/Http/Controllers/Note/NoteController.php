@@ -16,7 +16,7 @@ class NoteController extends Controller
         $subject = $semester->subjects()->where('code', $code)->firstOrFail();
 
         $data = $request->validate([
-            'content' => ['required', 'string'],
+            'content' => ['required', 'string', 'max:20000'],
         ]);
 
         $subject->note()->updateOrCreate(

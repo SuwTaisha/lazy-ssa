@@ -11,10 +11,10 @@ class PushSubscriptionController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'endpoint' => ['required', 'string'],
-            'keys.p256dh' => ['required', 'string'],
-            'keys.auth' => ['required', 'string'],
-            'contentEncoding' => ['nullable', 'string'],
+            'endpoint' => ['required', 'string', 'max:2048', 'url'],
+            'keys.p256dh' => ['required', 'string', 'max:255'],
+            'keys.auth' => ['required', 'string', 'max:255'],
+            'contentEncoding' => ['nullable', 'string', 'max:50'],
         ]);
 
         $request->user()->updatePushSubscription(
@@ -30,7 +30,7 @@ class PushSubscriptionController extends Controller
     public function destroy(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'endpoint' => ['required', 'string'],
+            'endpoint' => ['required', 'string', 'max:2048'],
         ]);
 
         $request->user()->deletePushSubscription($data['endpoint']);
