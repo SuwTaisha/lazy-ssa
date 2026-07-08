@@ -5,6 +5,7 @@ use App\Http\Controllers\ExamEntry\ExamEntryImportController;
 use App\Http\Controllers\Home\HomeController;
 use App\Http\Controllers\Note\NoteController;
 use App\Http\Controllers\Online\OnlineDayController;
+use App\Http\Controllers\Push\PushSubscriptionController;
 use App\Http\Controllers\Schedule\ScheduleImportController;
 use App\Http\Controllers\Schedule\ScheduleSlotController;
 use App\Http\Controllers\Semester\SemesterController;
@@ -27,6 +28,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/semesters/{semester}/online-days', [OnlineDayController::class, 'sync'])->name('online-days.sync');
     Route::put('/semesters/{semester}/exam-entries', [ExamEntryController::class, 'sync'])->name('exam-entries.sync');
     Route::post('/semesters/{semester}/exam-entries/import', [ExamEntryImportController::class, 'import'])->name('exam-entries.import');
+
+    Route::post('/webpush/subscribe', [PushSubscriptionController::class, 'store'])->name('webpush.subscribe');
+    Route::delete('/webpush/subscribe', [PushSubscriptionController::class, 'destroy'])->name('webpush.unsubscribe');
 });
 
 require __DIR__.'/auth.php';

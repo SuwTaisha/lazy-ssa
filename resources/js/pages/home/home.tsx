@@ -71,6 +71,7 @@ interface PageProps {
     examData: ExamData;
     examWeeksCount: number;
     isDemo: boolean;
+    vapidPublicKey: string | null;
     [key: string]: unknown;
 }
 
@@ -128,6 +129,19 @@ function isToday(d: Date): boolean {
     const n = new Date();
     return d.getDate() === n.getDate() && d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
 }
+// Web Push cần applicationServerKey dạng Uint8Array, còn VAPID public key server trả về
+// là base64url string -> phải tự decode, trình duyệt không có helper sẵn cho việc này.
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; i++) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
 function fmtCountdown(ms: number): string {
     if (ms <= 0) return 'Đã quá hạn';
     const totalSec = Math.floor(ms / 1000);
@@ -145,8 +159,21 @@ function fmtCountdown(ms: number): string {
 // ═══════════════════════════════════════════════════════════════════
 
 export default function Home() {
-    const { auth, semesterId, semStart, subjects, schedule, scheduleByDate, onlineDays, tasks, notes, examData, examWeeksCount, isDemo } =
-        usePage<PageProps>().props;
+    const {
+        auth,
+        semesterId,
+        semStart,
+        subjects,
+        schedule,
+        scheduleByDate,
+        onlineDays,
+        tasks,
+        notes,
+        examData,
+        examWeeksCount,
+        isDemo,
+        vapidPublicKey,
+    } = usePage<PageProps>().props;
     const user = auth.user;
     const totalWeeks = STUDY_WEEKS + examWeeksCount;
 
@@ -156,6 +183,8 @@ export default function Home() {
     const [bellOpen, setBellOpen] = useState<boolean>(false);
     const [bellAnim, setBellAnim] = useState<boolean>(false);
     const [modal, setModal] = useState<ModalState>(null);
+    const [showPushBanner, setShowPushBanner] = useState<boolean>(false);
+    const [subscribing, setSubscribing] = useState<boolean>(false);
 
     const currentWeek = useMemo(() => {
         const start = parseLocalDate(semStart);
@@ -198,6 +227,58 @@ export default function Home() {
     const showToast = (msg: string) => {
         setToast(msg);
         setTimeout(() => setToast(null), 2800);
+    };
+
+    // Chỉ gợi ý bật thông báo cho user thật (không phải demo), khi trình duyệt hỗ trợ
+    // Push, chưa từng được cấp/từ chối quyền, và chưa bị người dùng đóng banner trước đó.
+    useEffect(() => {
+        if (isDemo || !vapidPublicKey) return;
+        if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        if (Notification.permission !== 'default') return;
+        if (localStorage.getItem('pushBannerDismissed') === '1') return;
+        setShowPushBanner(true);
+    }, [isDemo, vapidPublicKey]);
+
+    const dismissPushBanner = () => {
+        localStorage.setItem('pushBannerDismissed', '1');
+        setShowPushBanner(false);
+    };
+
+    const enablePush = async () => {
+        if (!vapidPublicKey) return;
+        setSubscribing(true);
+        try {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                showToast('🔕 Bạn đã từ chối quyền thông báo');
+                return;
+            }
+            const registration = await navigator.serviceWorker.register('/sw.js');
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+            });
+            const json = subscription.toJSON();
+            router.post(
+                '/webpush/subscribe',
+                {
+                    endpoint: json.endpoint,
+                    keys: json.keys,
+                    contentEncoding: PushManager.supportedContentEncodings?.[0] ?? 'aesgcm',
+                },
+                {
+                    preserveScroll: true,
+                    onSuccess: () => showToast('🔔 Đã bật thông báo nhắc deadline!'),
+                    onError: () => showToast('❌ Không thể bật thông báo'),
+                }
+            );
+        } catch {
+            showToast('❌ Không thể bật thông báo');
+        } finally {
+            setSubscribing(false);
+            setShowPushBanner(false);
+            localStorage.setItem('pushBannerDismissed', '1');
+        }
     };
 
     // Chặn mọi hành động ghi khi là demo (chưa đăng nhập) -> đẩy sang trang login
@@ -244,6 +325,22 @@ export default function Home() {
                         Đăng nhập
                     </Link>{' '}
                     để dùng lịch học của riêng bạn.
+                </div>
+            )}
+
+            {showPushBanner && (
+                <div style={{ ...css.demoBanner, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ flex: 1 }}>🔔 Bật thông báo để được nhắc khi task sắp đến hạn (email + trình duyệt).</span>
+                    <button
+                        style={{ ...css.smallBtn, color: '#FF6B35', borderColor: '#FF6B3540', opacity: subscribing ? 0.6 : 1 }}
+                        disabled={subscribing}
+                        onClick={enablePush}
+                    >
+                        {subscribing ? 'Đang bật...' : 'Bật thông báo'}
+                    </button>
+                    <button style={css.smallBtn} onClick={dismissPushBanner}>
+                        Bỏ qua
+                    </button>
                 </div>
             )}
 

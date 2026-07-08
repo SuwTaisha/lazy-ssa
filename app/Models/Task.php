@@ -21,6 +21,7 @@ class Task extends Model
     protected $casts = [
         'deadline' => 'datetime',
         'done' => 'boolean',
+        'reminder_sent_at' => 'datetime',
     ];
 
     public function semester(): BelongsTo
