@@ -8,6 +8,41 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import viLocale from '@fullcalendar/core/locales/vi';
+import {
+    ArrowLeft,
+    BarChart3,
+    Bell,
+    BookOpen,
+    Calendar,
+    CalendarDays,
+    CalendarRange,
+    CheckSquare,
+    ChevronLeft,
+    ChevronRight,
+    ClipboardList,
+    Clock,
+    Globe,
+    ListChecks,
+    LogIn,
+    LogOut,
+    MessageCircle,
+    Moon,
+    NotebookPen,
+    Pencil,
+    Plus,
+    Save,
+    School,
+    Search,
+    Send,
+    Settings as SettingsIcon,
+    Square,
+    Sun,
+    Target,
+    Trash2,
+    Upload,
+    User,
+    X,
+} from 'lucide-react';
 
 // Inertia's router.put/post yêu cầu payload thoả FormDataConvertible (index signature).
 // Các type của app (Subject[], Schedule, OnlineDays, ExamData) đã có shape cụ thể nên
@@ -512,7 +547,7 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
             <div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                     <span style={{ fontSize: 22, fontWeight: 900, color: '#FF6B35', letterSpacing: -1 }}>FPT</span>
-                    <span style={{ fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: -1 }}>TIME</span>
+                    <span style={{ fontSize: 22, fontWeight: 900, color: 'var(--home-text)', letterSpacing: -1 }}>TIME</span>
                 </div>
                 <div style={{ fontSize: 9, color: 'var(--home-text-faint)', letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 1 }}>Management Toolkit</div>
             </div>
@@ -521,7 +556,7 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                 {user ? (
                     <>
                         <button className="flex items-center gap-1.5 rounded-lg border border-[#34D39930] bg-[#34D39912] px-3 py-1.5 text-xs font-bold text-[#34D399]">
-                            👤 {user.name}
+                            <User size={13} strokeWidth={2.5} /> {user.name}
                         </button>
                         <Link
                             href="/logout"
@@ -530,7 +565,7 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                             title="Đăng xuất"
                             className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/20 active:scale-95"
                         >
-                            🚪
+                            <LogOut size={14} strokeWidth={2.5} />
                         </Link>
                     </>
                 ) : (
@@ -538,12 +573,12 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                         href="/login"
                         className="flex items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-500 hover:bg-orange-500/20 active:scale-95"
                     >
-                        🔐 Đăng nhập
+                        <LogIn size={13} strokeWidth={2.5} /> Đăng nhập
                     </Link>
                 )}
 
                 <button style={css.iconBtn} title={isDark ? 'Giao diện sáng' : 'Giao diện tối'} onClick={toggleTheme}>
-                    {isDark ? '☀️' : '🌙'}
+                    {isDark ? <Sun size={16} strokeWidth={2.2} /> : <Moon size={16} strokeWidth={2.2} />}
                 </button>
 
                 <div style={{ position: 'relative' }}>
@@ -556,7 +591,7 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                         }}
                         onClick={() => setBellOpen((o) => !o)}
                     >
-                        🔔
+                        <Bell size={16} strokeWidth={2.2} />
                         {urgentCount > 0 && <span style={css.bellBadge}>{urgentCount}</span>}
                     </button>
                     {bellOpen && <BellPanel tasks={pendingTasks} onClose={() => setBellOpen(false)} />}
@@ -592,9 +627,11 @@ function BellPanel({ tasks, onClose }: { tasks: Task[]; onClose: () => void }) {
                     borderBottom: '1px solid var(--home-border)',
                 }}
             >
-                <span style={{ fontWeight: 700, fontSize: 13 }}>⏰ Deadline Tasks</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13 }}>
+                    <Clock size={14} strokeWidth={2.4} /> Deadline Tasks
+                </span>
                 <button style={css.closeBtn} onClick={onClose}>
-                    ✕
+                    <X size={16} strokeWidth={2.4} />
                 </button>
             </div>
             {tasks.length === 0 && <div style={{ padding: '28px 14px', textAlign: 'center', color: 'var(--home-text-faint)', fontSize: 13 }}>Không có task nào 🎉</div>}
@@ -635,19 +672,20 @@ function BellPanel({ tasks, onClose }: { tasks: Task[]; onClose: () => void }) {
 // ═══════════════════════════════════════════════════════════════════
 
 function BottomNav({ tab, setTab, pendingCount }: { tab: TabId; setTab: React.Dispatch<React.SetStateAction<TabId>>; pendingCount: number }) {
-    const items: { id: TabId; icon: string; label: string; badge?: number }[] = [
-        { id: 'schedule', icon: '📅', label: 'Lịch' },
-        { id: 'tasks', icon: '✅', label: 'Task', badge: pendingCount },
-        { id: 'notes', icon: '📝', label: 'Ghi chú' },
-        { id: 'settings', icon: '⚙️', label: 'Cài đặt' },
+    const items: { id: TabId; icon: React.ElementType; label: string; badge?: number }[] = [
+        { id: 'schedule', icon: CalendarDays, label: 'Lịch' },
+        { id: 'tasks', icon: CheckSquare, label: 'Task', badge: pendingCount },
+        { id: 'notes', icon: NotebookPen, label: 'Ghi chú' },
+        { id: 'settings', icon: SettingsIcon, label: 'Cài đặt' },
     ];
     return (
         <nav style={css.nav}>
             {items.map((item) => {
                 const active = tab === item.id;
+                const Icon = item.icon;
                 return (
                     <button key={item.id} style={{ ...css.navBtn, color: active ? '#FF6B35' : 'var(--home-text-faint)' }} onClick={() => setTab(item.id)}>
-                        <span style={{ fontSize: 18 }}>{item.icon}</span>
+                        <Icon size={18} strokeWidth={active ? 2.4 : 2} />
                         <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>{item.label}</span>
                         {!!item.badge && item.badge > 0 && <span style={css.navBadge}>{item.badge}</span>}
                         {active && <div style={css.navLine} />}
@@ -702,15 +740,18 @@ function ScheduleTab({
             <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                 {(
                     [
-                        ['week', '📋 Theo tuần'],
-                        ['calendar', '📅 Lịch'],
-                    ] as [typeof viewMode, string][]
-                ).map(([mode, label]) => (
+                        ['week', ListChecks, 'Theo tuần'],
+                        ['calendar', CalendarRange, 'Lịch'],
+                    ] as [typeof viewMode, React.ElementType, string][]
+                ).map(([mode, Icon, label]) => (
                     <button
                         key={mode}
                         onClick={() => setViewMode(mode)}
                         style={{
                             ...css.chip,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
                             padding: '6px 14px',
                             fontSize: 12,
                             background: viewMode === mode ? '#FF6B35' : 'transparent',
@@ -718,7 +759,7 @@ function ScheduleTab({
                             border: `1px solid ${viewMode === mode ? 'transparent' : 'var(--home-border-strong)'}`,
                         }}
                     >
-                        {label}
+                        <Icon size={13} strokeWidth={2.4} /> {label}
                     </button>
                 ))}
             </div>
@@ -727,11 +768,19 @@ function ScheduleTab({
                 <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.max(1, w - 1))}>
-                            ‹
+                            <ChevronLeft size={16} strokeWidth={2.4} />
                         </button>
                         <div style={{ flex: 1, textAlign: 'center' }}>
                             <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                                {isExam ? `🎯 TUẦN THI ${weekView - STUDY_WEEKS}` : `📚 TUẦN ${weekView}`}
+                                {isExam ? (
+                                    <>
+                                        <Target size={15} strokeWidth={2.4} /> TUẦN THI {weekView - STUDY_WEEKS}
+                                    </>
+                                ) : (
+                                    <>
+                                        <BookOpen size={15} strokeWidth={2.4} /> TUẦN {weekView}
+                                    </>
+                                )}
                                 {weekView === currentWeek && <span style={css.nowTag}>Hiện tại</span>}
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 2 }}>
@@ -739,7 +788,7 @@ function ScheduleTab({
                             </div>
                         </div>
                         <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.min(totalWeeks, w + 1))}>
-                            ›
+                            <ChevronRight size={16} strokeWidth={2.4} />
                         </button>
                     </div>
 
@@ -748,8 +797,8 @@ function ScheduleTab({
                     {!isExam && (
                         <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
                             {[
-                                ['#00C6FF', '🌐 Online'],
-                                ['#FF6B35', '🏫 Offline'],
+                                ['#00C6FF', 'Online'],
+                                ['#FF6B35', 'Offline'],
                             ].map(([c, l]) => (
                                 <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--home-text-dim)' }}>
                                     <div style={{ width: 7, height: 7, borderRadius: '50%', background: c }} />
@@ -901,6 +950,9 @@ function StudyWeek({
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <span
                                                     style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 3,
                                                         fontSize: 9,
                                                         fontWeight: 700,
                                                         padding: '2px 7px',
@@ -910,14 +962,19 @@ function StudyWeek({
                                                         border: `1px solid ${online ? '#00C6FF30' : '#FF6B3530'}`,
                                                     }}
                                                 >
-                                                    {online ? '🌐 Online' : '🏫 Offline'}
+                                                    {online ? <Globe size={10} strokeWidth={2.6} /> : <School size={10} strokeWidth={2.6} />}
+                                                    {online ? 'Online' : 'Offline'}
                                                 </span>
                                                 <span style={{ fontSize: 9, color: 'var(--home-text-faint)' }}>SLOT {item.slotOrder ?? i + 1}</span>
                                             </div>
                                         </div>
                                         <div style={{ fontSize: 11, color: 'var(--home-text-dim)', marginBottom: 7 }}>{sub.full}</div>
-                                        <button style={css.smallBtn} onClick={() => openModal(`note:${item.code}`)}>
-                                            {hasNote ? '📝 Xem ghi chú' : '➕ Thêm ghi chú'}
+                                        <button
+                                            style={{ ...css.smallBtn, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                            onClick={() => openModal(`note:${item.code}`)}
+                                        >
+                                            {hasNote ? <NotebookPen size={11} strokeWidth={2.4} /> : <Plus size={11} strokeWidth={2.4} />}
+                                            {hasNote ? 'Xem ghi chú' : 'Thêm ghi chú'}
                                         </button>
                                     </div>
                                 );
@@ -957,13 +1014,16 @@ function ExamWeek({
                     marginBottom: 12,
                 }}
             >
-                <span style={{ fontSize: 30 }}>🎯</span>
+                <Target size={28} strokeWidth={2} color="#FBBF24" />
                 <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 800, fontSize: 15, color: '#FBBF24' }}>TUẦN THI {examWeekNum}</div>
                     <div style={{ fontSize: 11, color: 'var(--home-text-dim)', marginTop: 2 }}>Chỉnh sửa theo thông báo chính thức</div>
                 </div>
-                <button style={{ ...css.smallBtn, color: '#FBBF24', borderColor: '#FBBF2440' }} onClick={() => openModal('exam')}>
-                    ✏️ Sửa
+                <button
+                    style={{ ...css.smallBtn, display: 'inline-flex', alignItems: 'center', gap: 4, color: '#FBBF24', borderColor: '#FBBF2440' }}
+                    onClick={() => openModal('exam')}
+                >
+                    <Pencil size={11} strokeWidth={2.4} /> Sửa
                 </button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -979,24 +1039,31 @@ function ExamWeek({
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
                                     {(
                                         [
-                                            ['📅', exam.date],
-                                            ['⏰', exam.time],
-                                            ['🏫', exam.room],
-                                            ['📋', exam.type],
-                                        ] as [string, string | undefined][]
+                                            [CalendarDays, exam.date],
+                                            [Clock, exam.time],
+                                            [School, exam.room],
+                                            [ClipboardList, exam.type],
+                                        ] as [React.ElementType, string | undefined][]
                                     )
                                         .filter(([, v]) => v)
-                                        .map(([icon, val]) => (
-                                            <div key={icon} style={{ fontSize: 11, color: 'var(--home-text-soft)' }}>
-                                                {icon} {val}
+                                        .map(([Icon, val], idx) => (
+                                            <div
+                                                key={idx}
+                                                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--home-text-soft)' }}
+                                            >
+                                                <Icon size={11} strokeWidth={2.2} /> {val}
                                             </div>
                                         ))}
                                 </div>
                             ) : (
                                 <div style={{ fontSize: 11, color: 'var(--home-text-faint)', fontStyle: 'italic', marginBottom: 8 }}>Chưa có lịch thi</div>
                             )}
-                            <button style={css.smallBtn} onClick={() => openModal(`note:${sub.id}`)}>
-                                {hasNote ? '📝 Ghi chú' : '➕ Ôn thi'}
+                            <button
+                                style={{ ...css.smallBtn, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                onClick={() => openModal(`note:${sub.id}`)}
+                            >
+                                {hasNote ? <NotebookPen size={11} strokeWidth={2.4} /> : <Plus size={11} strokeWidth={2.4} />}
+                                {hasNote ? 'Ghi chú' : 'Ôn thi'}
                             </button>
                         </div>
                     );
@@ -1191,7 +1258,9 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
     return (
         <div style={css.tab} className="anim-fadeup">
             <div style={css.card}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#FF6B35', marginBottom: 6 }}>➕ Thêm Nhiệm Vụ</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, fontSize: 14, color: '#FF6B35', marginBottom: 6 }}>
+                    <Plus size={14} strokeWidth={2.6} /> Thêm Nhiệm Vụ
+                </div>
                 <select value={newSub} onChange={(e) => setNewSub(e.target.value)} style={css.select}>
                     {subjects.map((s) => (
                         <option key={s.id} value={s.id}>
@@ -1230,14 +1299,14 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {['ALL', ...subjects.map((s) => s.id)].map((f) => {
                     const active = f === filter;
-                    const color = f === 'ALL' ? '#fff' : subjectMap[f]?.color || 'var(--home-text-dim)';
+                    const color = f === 'ALL' ? 'var(--home-text)' : subjectMap[f]?.color || 'var(--home-text-dim)';
                     return (
                         <button
                             key={f}
                             onClick={() => setFilter(f)}
                             style={{
                                 ...css.chip,
-                                background: active ? (f === 'ALL' ? '#fff' : color) : 'transparent',
+                                background: active ? color : 'transparent',
                                 color: active ? (f === 'ALL' ? 'var(--home-bg)' : '#fff') : 'var(--home-text-dim)',
                                 border: `1px solid ${active ? 'transparent' : 'var(--home-border-strong)'}`,
                             }}
@@ -1258,8 +1327,19 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
 
             {done.length > 0 && (
                 <>
-                    <div style={{ fontSize: 11, color: 'var(--home-text-faint)', fontWeight: 700, padding: '4px 0', borderTop: '1px solid var(--home-border)' }}>
-                        ✅ HOÀN THÀNH ({done.length})
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: 11,
+                            color: 'var(--home-text-faint)',
+                            fontWeight: 700,
+                            padding: '4px 0',
+                            borderTop: '1px solid var(--home-border)',
+                        }}
+                    >
+                        <CheckSquare size={12} strokeWidth={2.4} /> HOÀN THÀNH ({done.length})
                     </div>
                     {done.map((t) => (
                         <TaskRow key={t.id} task={t} subjectMap={subjectMap} onToggle={toggleTask} onDelete={deleteTask} overdue={false} />
@@ -1298,8 +1378,11 @@ function TaskRow({
                 opacity: task.done ? 0.5 : 1,
             }}
         >
-            <button style={{ background: 'none', border: 'none', fontSize: 19, cursor: 'pointer', flexShrink: 0 }} onClick={() => onToggle(task.id)}>
-                {task.done ? '✅' : '⬜'}
+            <button
+                style={{ background: 'none', border: 'none', color: task.done ? '#34D399' : 'var(--home-text-faint)', cursor: 'pointer', flexShrink: 0, display: 'flex' }}
+                onClick={() => onToggle(task.id)}
+            >
+                {task.done ? <CheckSquare size={19} strokeWidth={2} /> : <Square size={19} strokeWidth={2} />}
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div
@@ -1317,8 +1400,16 @@ function TaskRow({
                 <div style={{ display: 'flex', gap: 8, marginTop: 3, flexWrap: 'wrap', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: sub.color }}>{task.subject}</span>
                     {task.deadline && (
-                        <span style={{ fontSize: 10, color: overdue && !task.done ? '#EF4444' : 'var(--home-text-faint)' }}>
-                            ⏰{' '}
+                        <span
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                fontSize: 10,
+                                color: overdue && !task.done ? '#EF4444' : 'var(--home-text-faint)',
+                            }}
+                        >
+                            <Clock size={10} strokeWidth={2.4} />
                             {new Date(task.deadline).toLocaleString('vi-VN', {
                                 day: '2-digit',
                                 month: '2-digit',
@@ -1330,10 +1421,10 @@ function TaskRow({
                 </div>
             </div>
             <button
-                style={{ background: 'none', border: 'none', fontSize: 15, cursor: 'pointer', opacity: 0.35, flexShrink: 0 }}
+                style={{ background: 'none', border: 'none', color: 'var(--home-text-faint)', cursor: 'pointer', opacity: 0.6, flexShrink: 0, display: 'flex' }}
                 onClick={() => onDelete(task.id)}
             >
-                🗑
+                <Trash2 size={15} strokeWidth={2.2} />
             </button>
         </div>
     );
@@ -1370,7 +1461,10 @@ function NotesTab({ subjects, notes, openModal }: { subjects: Subject[]; notes: 
                             >
                                 {note ? note.slice(0, 110) + (note.length > 110 ? '…' : '') : 'Chưa có ghi chú...'}
                             </div>
-                            <div style={{ fontSize: 10, color: sub.color, fontWeight: 700, marginTop: 6 }}>{note ? '✏️ Chỉnh sửa' : '➕ Thêm'}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: sub.color, fontWeight: 700, marginTop: 6 }}>
+                                {note ? <Pencil size={10} strokeWidth={2.6} /> : <Plus size={10} strokeWidth={2.6} />}
+                                {note ? 'Chỉnh sửa' : 'Thêm'}
+                            </div>
                         </div>
                     );
                 })}
@@ -1424,7 +1518,9 @@ function SettingsTab({
     return (
         <div style={css.tab} className="anim-fadeup">
             <div style={css.card}>
-                <div style={css.cardTitle}>📅 Ngày Bắt Đầu Học Kỳ</div>
+                <div style={css.cardTitle}>
+                    <Calendar size={15} strokeWidth={2.4} /> Ngày Bắt Đầu Học Kỳ
+                </div>
                 <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginBottom: 6 }}>Chọn ngày Thứ 2 của tuần đầu tiên</div>
                 <input type="date" value={semStart} onChange={(e) => changeSemStart(e.target.value)} style={css.input} disabled={isDemo} />
                 <div style={{ fontSize: 12, color: 'var(--home-text-dim)' }}>
@@ -1436,11 +1532,13 @@ function SettingsTab({
             </div>
 
             <div style={css.card}>
-                <div style={css.cardTitle}>⚙️ Tuỳ Chỉnh</div>
+                <div style={css.cardTitle}>
+                    <SettingsIcon size={15} strokeWidth={2.4} /> Tuỳ Chỉnh
+                </div>
                 {[
-                    { icon: '📚', label: 'Quản lý môn học', sub: 'Thêm, sửa, xóa, đổi màu môn', id: 'subjects' },
-                    { icon: '🗓', label: 'Lịch học theo ngày', sub: 'Chỉnh slot môn cho từng thứ', id: 'schedule' },
-                    { icon: '💬', label: 'Gửi phản hồi', sub: 'Góp ý, báo lỗi cho ứng dụng', id: 'feedback' },
+                    { icon: BookOpen, label: 'Quản lý môn học', sub: 'Thêm, sửa, xóa, đổi màu môn', id: 'subjects' },
+                    { icon: CalendarDays, label: 'Lịch học theo ngày', sub: 'Chỉnh slot môn cho từng thứ', id: 'schedule' },
+                    { icon: MessageCircle, label: 'Gửi phản hồi', sub: 'Góp ý, báo lỗi cho ứng dụng', id: 'feedback' },
                 ].map((item) => (
                     <button
                         key={item.id}
@@ -1458,18 +1556,34 @@ function SettingsTab({
                             textAlign: 'left',
                         }}
                     >
-                        <span style={{ fontSize: 22 }}>{item.icon}</span>
+                        <span
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 34,
+                                height: 34,
+                                borderRadius: 9,
+                                flexShrink: 0,
+                                background: '#FF6B3514',
+                                color: '#FF6B35',
+                            }}
+                        >
+                            <item.icon size={17} strokeWidth={2.2} />
+                        </span>
                         <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--home-text)' }}>{item.label}</div>
                             <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 1 }}>{item.sub}</div>
                         </div>
-                        <span style={{ color: 'var(--home-text-faint)', fontSize: 18 }}>›</span>
+                        <ChevronRight size={16} color="var(--home-text-faint)" />
                     </button>
                 ))}
             </div>
 
             <div style={css.card}>
-                <div style={css.cardTitle}>📊 Tiến Độ Học Kỳ</div>
+                <div style={css.cardTitle}>
+                    <BarChart3 size={15} strokeWidth={2.4} /> Tiến Độ Học Kỳ
+                </div>
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
                     {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((w) => {
                         const isExam = w > STUDY_WEEKS;
@@ -1533,7 +1647,7 @@ function ModalShell({
                 >
                     <div style={{ fontWeight: 800, fontSize: 15 }}>{title}</div>
                     <button style={css.closeBtn} onClick={onClose}>
-                        ✕
+                        <X size={18} strokeWidth={2.4} />
                     </button>
                 </div>
                 <div style={{ overflowY: 'auto', flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>{children}</div>
@@ -1590,7 +1704,11 @@ function NoteModal({
 
     return (
         <ModalShell
-            title={<span style={{ color: sub.color }}>📝 {sub.name}</span>}
+            title={
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: sub.color }}>
+                    <NotebookPen size={16} strokeWidth={2.4} /> {sub.name}
+                </span>
+            }
             onClose={onClose}
             footer={
                 <>
@@ -1602,7 +1720,7 @@ function NoteModal({
                         onClick={saveNote}
                         disabled={saving}
                     >
-                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
+                        <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu'}
                     </button>
                 </>
             }
@@ -1689,7 +1807,11 @@ function ExamModal({
 
     return (
         <ModalShell
-            title="🎯 Lịch Thi"
+            title={
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <Target size={16} strokeWidth={2.4} /> Lịch Thi
+                </span>
+            }
             onClose={onClose}
             footer={
                 <>
@@ -1701,7 +1823,7 @@ function ExamModal({
                         onClick={saveExam}
                         disabled={saving}
                     >
-                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
+                        <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu'}
                     </button>
                 </>
             }
@@ -1720,7 +1842,7 @@ function ExamModal({
                     disabled={importing}
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    📥 {importing ? 'Đang nhập...' : 'Nhập file .ics'}
+                    <Upload size={12} strokeWidth={2.4} /> {importing ? 'Đang nhập...' : 'Nhập file .ics'}
                 </button>
             </div>
 
@@ -1777,7 +1899,7 @@ function ExamModal({
                                     ))}
                                 </select>
                                 <button style={css.smallBtn} onClick={addSubjectToWeek} disabled={!addSubId}>
-                                    ➕
+                                    <Plus size={13} strokeWidth={2.4} />
                                 </button>
                             </div>
                         )}
@@ -1811,7 +1933,7 @@ function ExamModal({
                                                 });
                                             }}
                                         >
-                                            ✕
+                                            <X size={12} strokeWidth={2.6} />
                                         </button>
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -1922,7 +2044,11 @@ function SubjectsModal({
 
     return (
         <ModalShell
-            title="📚 Quản Lý Môn Học"
+            title={
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <BookOpen size={16} strokeWidth={2.4} /> Quản Lý Môn Học
+                </span>
+            }
             onClose={onClose}
             footer={
                 <>
@@ -1934,7 +2060,7 @@ function SubjectsModal({
                         onClick={saveSubjects}
                         disabled={saving}
                     >
-                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
+                        <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu'}
                     </button>
                 </>
             }
@@ -1958,6 +2084,7 @@ function SubjectsModal({
                         <button
                             onClick={() => remove(i)}
                             style={{
+                                display: 'flex',
                                 background: '#EF444418',
                                 border: '1px solid #EF444430',
                                 color: '#EF4444',
@@ -1967,7 +2094,7 @@ function SubjectsModal({
                                 fontSize: 12,
                             }}
                         >
-                            🗑
+                            <Trash2 size={14} strokeWidth={2.2} />
                         </button>
                     </div>
                     <input
@@ -1980,7 +2107,9 @@ function SubjectsModal({
             ))}
 
             <div style={{ background: 'var(--home-card)', border: '1px dashed var(--home-border-strong)', borderRadius: 10, padding: '12px' }}>
-                <div style={{ fontSize: 12, color: 'var(--home-text-dim)', fontWeight: 600, marginBottom: 8 }}>➕ Thêm môn mới</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--home-text-dim)', fontWeight: 600, marginBottom: 8 }}>
+                    <Plus size={13} strokeWidth={2.4} /> Thêm môn mới
+                </div>
                 <div style={{ display: 'flex', gap: 7, marginBottom: 6 }}>
                     <input
                         value={newName}
@@ -2107,19 +2236,26 @@ function ScheduleModal({
     if (selectedSubject) {
         return (
             <ModalShell
-                title={`🗓 ${selectedSubject.name}`}
+                title={
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <CalendarDays size={16} strokeWidth={2.4} /> {selectedSubject.name}
+                    </span>
+                }
                 onClose={onClose}
                 footer={
                     <>
-                        <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={backToList}>
-                            ← Quay lại
+                        <button
+                            style={{ ...css.chip, display: 'inline-flex', alignItems: 'center', gap: 4, flex: 1, padding: '10px', justifyContent: 'center' }}
+                            onClick={backToList}
+                        >
+                            <ArrowLeft size={13} strokeWidth={2.4} /> Quay lại
                         </button>
                         <button
                             style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
                             onClick={saveSessions}
                             disabled={saving}
                         >
-                            💾 {saving ? 'Đang lưu...' : 'Lưu'}
+                            <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu'}
                         </button>
                     </>
                 }
@@ -2143,6 +2279,8 @@ function ScheduleModal({
                             <button
                                 onClick={() => removeSession(i)}
                                 style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
                                     background: '#EF444418',
                                     border: 'none',
                                     color: '#EF4444',
@@ -2152,7 +2290,7 @@ function ScheduleModal({
                                     fontSize: 12,
                                 }}
                             >
-                                ✕
+                                <X size={13} strokeWidth={2.6} />
                             </button>
                         </div>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -2173,7 +2311,7 @@ function ScheduleModal({
                                     checked={s.isOnline}
                                     onChange={(e) => updateSession(i, 'isOnline', e.target.checked)}
                                 />
-                                🌐 Online
+                                <Globe size={12} strokeWidth={2.4} /> Online
                             </label>
                         </div>
                     </div>
@@ -2186,7 +2324,14 @@ function ScheduleModal({
     }
 
     return (
-        <ModalShell title="🗓 Lịch Học Theo Ngày" onClose={onClose}>
+        <ModalShell
+            title={
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <CalendarDays size={16} strokeWidth={2.4} /> Lịch Học Theo Ngày
+                </span>
+            }
+            onClose={onClose}
+        >
             <div style={{ background: 'var(--home-input)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, color: 'var(--home-text-dim)', flex: 1 }}>Nhập lịch học tự động từ file .ics</span>
                 <input
@@ -2201,15 +2346,22 @@ function ScheduleModal({
                     disabled={importing}
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    📥 {importing ? 'Đang nhập...' : 'Nhập file .ics'}
+                    <Upload size={12} strokeWidth={2.4} /> {importing ? 'Đang nhập...' : 'Nhập file .ics'}
                 </button>
             </div>
-            <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="🔍 Tìm môn học..."
-                style={css.input}
-            />
+            <div style={{ position: 'relative' }}>
+                <Search
+                    size={14}
+                    strokeWidth={2.2}
+                    style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--home-text-faint)' }}
+                />
+                <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Tìm môn học..."
+                    style={{ ...css.input, paddingLeft: 30 }}
+                />
+            </div>
             {filteredSubjects.length === 0 && (
                 <div style={{ textAlign: 'center', color: 'var(--home-text-dim)', fontSize: 12, padding: '16px 0' }}>Không tìm thấy môn học nào</div>
             )}
@@ -2233,6 +2385,10 @@ function ScheduleModal({
             </div>
             <button
                 style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
                     background: '#EF444418',
                     border: '1px solid #EF444430',
                     color: '#EF4444',
@@ -2246,7 +2402,7 @@ function ScheduleModal({
                 disabled={deletingAll}
                 onClick={deleteAllSchedule}
             >
-                🗑 {deletingAll ? 'Đang xoá...' : 'Xoá toàn bộ lịch học'}
+                <Trash2 size={13} strokeWidth={2.4} /> {deletingAll ? 'Đang xoá...' : 'Xoá toàn bộ lịch học'}
             </button>
         </ModalShell>
     );
@@ -2293,7 +2449,11 @@ function FeedbackModal({
 
     return (
         <ModalShell
-            title="💬 Gửi Phản Hồi"
+            title={
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <MessageCircle size={16} strokeWidth={2.4} /> Gửi Phản Hồi
+                </span>
+            }
             onClose={onClose}
             footer={
                 <>
@@ -2305,7 +2465,7 @@ function FeedbackModal({
                         onClick={submitFeedback}
                         disabled={saving}
                     >
-                        📤 {saving ? 'Đang gửi...' : 'Gửi'}
+                        <Send size={13} strokeWidth={2.4} /> {saving ? 'Đang gửi...' : 'Gửi'}
                     </button>
                 </>
             }
@@ -2340,8 +2500,19 @@ function FeedbackModal({
 
             {feedback.length > 0 && (
                 <>
-                    <div style={{ borderTop: '1px solid var(--home-border)', paddingTop: 10, fontSize: 12, fontWeight: 700, color: 'var(--home-text-dim)' }}>
-                        📋 Phản hồi trước đây ({feedback.length})
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            borderTop: '1px solid var(--home-border)',
+                            paddingTop: 10,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: 'var(--home-text-dim)',
+                        }}
+                    >
+                        <ClipboardList size={13} strokeWidth={2.4} /> Phản hồi trước đây ({feedback.length})
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
                         {feedback.map((f) => (
@@ -2597,7 +2768,7 @@ const css: Record<string, CSSProperties> = {
         flexDirection: 'column',
         gap: 8,
     },
-    cardTitle: { fontWeight: 700, fontSize: 14 },
+    cardTitle: { display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 14 },
     input: {
         background: 'var(--home-input)',
         border: '1px solid var(--home-border)',
@@ -2632,6 +2803,9 @@ const css: Record<string, CSSProperties> = {
         gap: 4,
     },
     smallBtn: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
         fontSize: 10,
         background: 'none',
         border: '1px solid var(--home-border)',
@@ -2651,9 +2825,9 @@ const css: Record<string, CSSProperties> = {
         fontWeight: 600,
     },
     arrowBtn: {
-        background: 'var(--home-border)',
+        background: 'var(--home-input)',
         border: '1px solid var(--home-border)',
-        color: '#fff',
+        color: 'var(--home-text)',
         borderRadius: 8,
         width: 36,
         height: 36,
@@ -2693,9 +2867,9 @@ const css: Record<string, CSSProperties> = {
         bottom: 22,
         left: '50%',
         transform: 'translateX(-50%)',
-        background: 'var(--home-input)',
+        background: 'var(--home-card)',
         border: '1px solid #FF6B3540',
-        color: '#fff',
+        color: 'var(--home-text)',
         padding: '9px 22px',
         borderRadius: 22,
         zIndex: 400,
