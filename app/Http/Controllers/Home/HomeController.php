@@ -23,6 +23,7 @@ class HomeController extends Controller
                 'subjects' => $this->demoSubjects(),
                 'schedule' => $this->demoSchedule(),
                 'scheduleByDate' => (object) [],
+                'scheduleSlotsBySubject' => (object) [],
                 'onlineDays' => $this->demoOnlineDays(),
                 'tasks' => [],
                 'notes' => (object) [],
@@ -97,6 +98,25 @@ class HomeController extends Controller
             ])->all()
         );
 
+        // Toàn bộ buổi học có ngày cụ thể của từng môn (kể cả buổi đã qua), dùng cho màn
+        // quản lý "Lịch học theo ngày" trong Cài đặt — khác với $scheduleByDate (chỉ để
+        // in lên lịch tuần) vì ở đây user cần thấy/sửa được cả buổi trong quá khứ.
+        $scheduleSlotsBySubject = [];
+        foreach ($semester->subjects as $subject) {
+            $sessions = $subject->scheduleSlots
+                ->filter(fn ($slot) => $slot->class_date !== null)
+                ->sortBy(fn ($slot) => $slot->class_date->toDateString().' '.($slot->start_time ?? ''))
+                ->values()
+                ->map(fn ($slot) => [
+                    'classDate' => $slot->class_date->toDateString(),
+                    'slot' => $slot->slot_order,
+                    'isOnline' => $slot->is_online,
+                ]);
+            if ($sessions->isNotEmpty()) {
+                $scheduleSlotsBySubject[$subject->code] = $sessions->all();
+            }
+        }
+
         $onlineDays = [];
         foreach (range(1, self::STUDY_WEEKS) as $w) {
             $onlineDays[$w] = [];
@@ -144,6 +164,7 @@ class HomeController extends Controller
             'subjects' => $subjects,
             'schedule' => $schedule,
             'scheduleByDate' => (object) $scheduleByDate->all(),
+            'scheduleSlotsBySubject' => (object) $scheduleSlotsBySubject,
             'onlineDays' => $onlineDays,
             'tasks' => $tasks,
             'notes' => (object) $notes,

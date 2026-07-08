@@ -34,6 +34,23 @@ interface DatedScheduleItem {
 }
 type ScheduleByDate = Record<string, DatedScheduleItem[]>; // 'YYYY-MM-DD' -> subjects học ngày đó
 
+interface ScheduleSession {
+    classDate: string;
+    slot: number;
+    isOnline: boolean;
+}
+type ScheduleSlotsBySubject = Record<string, ScheduleSession[]>; // subjectCode -> toàn bộ buổi học (kể cả quá khứ)
+
+// Khung giờ chuẩn theo slot của FPT — đúng theo ScheduleSlotController::SLOT_TIMES ở backend,
+// chỉ để hiển thị (giờ thật do backend tính, không tin giờ client tự gửi lên).
+const SLOT_TIMES: Record<number, [string, string]> = {
+    1: ['07:00', '09:15'],
+    2: ['09:30', '11:45'],
+    3: ['12:30', '14:45'],
+    4: ['15:00', '17:15'],
+    5: ['17:30', '19:45'],
+};
+
 interface Task {
     id: number;
     subject: string; // subject code, "" nếu không gắn môn
@@ -65,6 +82,7 @@ interface PageProps {
     subjects: Subject[];
     schedule: Schedule;
     scheduleByDate: ScheduleByDate;
+    scheduleSlotsBySubject: ScheduleSlotsBySubject;
     onlineDays: OnlineDays;
     tasks: Task[];
     notes: Notes;
@@ -166,6 +184,7 @@ export default function Home() {
         subjects,
         schedule,
         scheduleByDate,
+        scheduleSlotsBySubject,
         onlineDays,
         tasks,
         notes,
@@ -400,7 +419,13 @@ export default function Home() {
                 <SubjectsModal subjects={subjects} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
             )}
             {modal === 'schedule' && semesterId && (
-                <ScheduleModal schedule={schedule} subjects={subjects} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
+                <ScheduleModal
+                    subjects={subjects}
+                    scheduleSlotsBySubject={scheduleSlotsBySubject}
+                    semesterId={semesterId}
+                    onClose={closeModal}
+                    showToast={showToast}
+                />
             )}
             {modal === 'online' && semesterId && (
                 <OnlineModal onlineDays={onlineDays} semesterId={semesterId} onClose={closeModal} showToast={showToast} />
@@ -1728,36 +1753,60 @@ function SubjectsModal({
 }
 
 function ScheduleModal({
-    schedule,
     subjects,
+    scheduleSlotsBySubject,
     semesterId,
     onClose,
     showToast,
 }: {
-    schedule: Schedule;
     subjects: Subject[];
+    scheduleSlotsBySubject: ScheduleSlotsBySubject;
     semesterId: number;
     onClose: () => void;
     showToast: (msg: string) => void;
 }) {
-    const [local, setLocal] = useState<Schedule>(JSON.parse(JSON.stringify(schedule)));
+    const [selectedCode, setSelectedCode] = useState<string | null>(null);
+    const [query, setQuery] = useState('');
+    const [sessions, setSessions] = useState<ScheduleSession[]>([]);
     const [saving, setSaving] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [deletingAll, setDeletingAll] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-    const updateSlot = (day: number, idx: number, val: string) =>
-        setLocal((prev) => ({ ...prev, [day]: prev[day].map((s, i) => (i === idx ? val : s)) }));
-    const addSlot = (day: number) => setLocal((prev) => ({ ...prev, [day]: [...(prev[day] || []), subjects[0]?.id || ''] }));
-    const removeSlot = (day: number, idx: number) => setLocal((prev) => ({ ...prev, [day]: prev[day].filter((_, i) => i !== idx) }));
+    const deleteAllSchedule = () => {
+        if (!window.confirm('Xoá TOÀN BỘ lịch học của mọi môn? Hành động này không thể hoàn tác.')) {
+            return;
+        }
+        setDeletingAll(true);
+        router.delete(`/semesters/${semesterId}/schedule-slots`, {
+            preserveScroll: true,
+            onSuccess: () => showToast('🗑 Đã xoá toàn bộ lịch học!'),
+            onFinish: () => setDeletingAll(false),
+        });
+    };
 
-    const saveSchedule = () => {
+    const openSubject = (code: string) => {
+        setSelectedCode(code);
+        setSessions((scheduleSlotsBySubject[code] || []).map((s) => ({ ...s })));
+    };
+    const backToList = () => setSelectedCode(null);
+
+    const updateSession = (idx: number, field: keyof ScheduleSession, val: string | number | boolean) =>
+        setSessions((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: val } : s)));
+    const addSession = () => setSessions((prev) => [...prev, { classDate: '', slot: 1, isOnline: false }]);
+    const removeSession = (idx: number) => setSessions((prev) => prev.filter((_, i) => i !== idx));
+
+    const saveSessions = () => {
+        if (!selectedCode) return;
         setSaving(true);
-        router.put(`/semesters/${semesterId}/schedule`, asFormData({ schedule: local }), {
+        const slots = sessions.map((s) => ({ class_date: s.classDate, slot: s.slot, is_online: s.isOnline }));
+        router.put(`/semesters/${semesterId}/subjects/${selectedCode}/schedule-slots`, asFormData({ slots }), {
             preserveScroll: true,
             onSuccess: () => {
                 showToast('✅ Đã lưu lịch học!');
-                onClose();
+                setSelectedCode(null);
             },
+            onError: () => showToast('❌ Không thể lưu lịch học. Kiểm tra lại ngày/slot.'),
             onFinish: () => setSaving(false),
         });
     };
@@ -1780,25 +1829,96 @@ function ScheduleModal({
         });
     };
 
-    return (
-        <ModalShell
-            title="🗓 Lịch Học Theo Ngày"
-            onClose={onClose}
-            footer={
-                <>
-                    <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
-                        Hủy
-                    </button>
-                    <button
-                        style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
-                        onClick={saveSchedule}
-                        disabled={saving}
+    const q = query.trim().toLowerCase();
+    const filteredSubjects = q
+        ? subjects.filter((s) => s.name.toLowerCase().includes(q) || s.full.toLowerCase().includes(q))
+        : subjects;
+
+    const selectedSubject = selectedCode ? subjects.find((s) => s.id === selectedCode) : null;
+
+    if (selectedSubject) {
+        return (
+            <ModalShell
+                title={`🗓 ${selectedSubject.name}`}
+                onClose={onClose}
+                footer={
+                    <>
+                        <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={backToList}>
+                            ← Quay lại
+                        </button>
+                        <button
+                            style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                            onClick={saveSessions}
+                            disabled={saving}
+                        >
+                            💾 {saving ? 'Đang lưu...' : 'Lưu'}
+                        </button>
+                    </>
+                }
+            >
+                <div style={{ fontSize: 12, color: '#999' }}>{selectedSubject.full}</div>
+                {sessions.length === 0 && (
+                    <div style={{ textAlign: 'center', color: '#666', fontSize: 12, padding: '16px 0' }}>Chưa có buổi học nào</div>
+                )}
+                {sessions.map((s, i) => (
+                    <div
+                        key={i}
+                        style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${selectedSubject.color}` }}
                     >
-                        💾 {saving ? 'Đang lưu...' : 'Lưu'}
-                    </button>
-                </>
-            }
-        >
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                            <input
+                                type="date"
+                                value={s.classDate}
+                                onChange={(e) => updateSession(i, 'classDate', e.target.value)}
+                                style={{ ...css.input, flex: 1 }}
+                            />
+                            <button
+                                onClick={() => removeSession(i)}
+                                style={{
+                                    background: '#EF444418',
+                                    border: 'none',
+                                    color: '#EF4444',
+                                    borderRadius: 6,
+                                    padding: '5px 8px',
+                                    cursor: 'pointer',
+                                    fontSize: 12,
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <select
+                                value={s.slot}
+                                onChange={(e) => updateSession(i, 'slot', Number(e.target.value))}
+                                style={{ ...css.select, flex: 1 }}
+                            >
+                                {[1, 2, 3, 4, 5].map((n) => (
+                                    <option key={n} value={n}>
+                                        Slot {n} ({SLOT_TIMES[n][0]}-{SLOT_TIMES[n][1]})
+                                    </option>
+                                ))}
+                            </select>
+                            <label style={{ fontSize: 11, color: '#999', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={s.isOnline}
+                                    onChange={(e) => updateSession(i, 'isOnline', e.target.checked)}
+                                />
+                                🌐 Online
+                            </label>
+                        </div>
+                    </div>
+                ))}
+                <button style={css.smallBtn} onClick={addSession}>
+                    + Thêm buổi học
+                </button>
+            </ModalShell>
+        );
+    }
+
+    return (
+        <ModalShell title="🗓 Lịch Học Theo Ngày" onClose={onClose}>
             <div style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, color: '#999', flex: 1 }}>Nhập lịch học tự động từ file .ics</span>
                 <input
@@ -1816,41 +1936,50 @@ function ScheduleModal({
                     📥 {importing ? 'Đang nhập...' : 'Nhập file .ics'}
                 </button>
             </div>
-            {[1, 2, 3, 4, 5].map((day) => (
-                <div key={day} style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{DAY_NAMES[day]}</div>
-                    {(local[day] || []).map((sid, i) => (
-                        <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                            <span style={{ fontSize: 10, color: '#555', width: 16, flexShrink: 0 }}>S{i + 1}</span>
-                            <select value={sid} onChange={(e) => updateSlot(day, i, e.target.value)} style={{ ...css.select, flex: 1 }}>
-                                <option value="">— Trống —</option>
-                                {subjects.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                        {s.name}
-                                    </option>
-                                ))}
-                            </select>
-                            <button
-                                onClick={() => removeSlot(day, i)}
-                                style={{
-                                    background: '#EF444418',
-                                    border: 'none',
-                                    color: '#EF4444',
-                                    borderRadius: 6,
-                                    padding: '5px 8px',
-                                    cursor: 'pointer',
-                                    fontSize: 12,
-                                }}
-                            >
-                                ✕
-                            </button>
+            <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="🔍 Tìm môn học..."
+                style={css.input}
+            />
+            {filteredSubjects.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#666', fontSize: 12, padding: '16px 0' }}>Không tìm thấy môn học nào</div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {filteredSubjects.map((s) => {
+                    const count = (scheduleSlotsBySubject[s.id] || []).length;
+                    return (
+                        <div
+                            key={s.id}
+                            style={{ ...css.card, borderTop: `3px solid ${s.color}`, cursor: 'pointer', gap: 4 }}
+                            onClick={() => openSubject(s.id)}
+                        >
+                            <div style={{ fontWeight: 800, fontSize: 13, color: s.color }}>{s.name}</div>
+                            <div style={{ fontSize: 10, color: '#555' }}>{s.full}</div>
+                            <div style={{ fontSize: 10, color: count ? '#888' : '#444', marginTop: 6 }}>
+                                {count ? `${count} buổi học` : 'Chưa có buổi học'}
+                            </div>
                         </div>
-                    ))}
-                    <button style={css.smallBtn} onClick={() => addSlot(day)}>
-                        + Thêm slot
-                    </button>
-                </div>
-            ))}
+                    );
+                })}
+            </div>
+            <button
+                style={{
+                    background: '#EF444418',
+                    border: '1px solid #EF444430',
+                    color: '#EF4444',
+                    borderRadius: 10,
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    opacity: deletingAll ? 0.6 : 1,
+                }}
+                disabled={deletingAll}
+                onClick={deleteAllSchedule}
+            >
+                🗑 {deletingAll ? 'Đang xoá...' : 'Xoá toàn bộ lịch học'}
+            </button>
         </ModalShell>
     );
 }
