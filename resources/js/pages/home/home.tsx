@@ -67,6 +67,13 @@ interface Task {
 
 type Notes = Record<string, string>; // subjectCode -> note text
 
+interface FeedbackItem {
+    id: number;
+    rating: number;
+    content: string;
+    createdAt: string;
+}
+
 interface ExamEntry {
     date?: string;
     time?: string;
@@ -93,6 +100,7 @@ interface PageProps {
     notes: Notes;
     examData: ExamData;
     examWeeksCount: number;
+    feedback: FeedbackItem[];
     isDemo: boolean;
     vapidPublicKey: string | null;
     [key: string]: unknown;
@@ -194,6 +202,7 @@ export default function Home() {
         notes,
         examData,
         examWeeksCount,
+        feedback,
         isDemo,
         vapidPublicKey,
     } = usePage<PageProps>().props;
@@ -448,7 +457,7 @@ export default function Home() {
                     showToast={showToast}
                 />
             )}
-            {modal === 'feedback' && <FeedbackModal onClose={closeModal} showToast={showToast} />}
+            {modal === 'feedback' && <FeedbackModal feedback={feedback} onClose={closeModal} showToast={showToast} />}
             {modal && modal.startsWith('note:') && semesterId && (
                 <NoteModal
                     subjectId={modal.slice(5)}
@@ -2236,7 +2245,15 @@ function ScheduleModal({
     );
 }
 
-function FeedbackModal({ onClose, showToast }: { onClose: () => void; showToast: (msg: string) => void }) {
+function FeedbackModal({
+    feedback,
+    onClose,
+    showToast,
+}: {
+    feedback: FeedbackItem[];
+    onClose: () => void;
+    showToast: (msg: string) => void;
+}) {
     const [rating, setRating] = useState<number>(0);
     const [content, setContent] = useState<string>('');
     const [saving, setSaving] = useState(false);
@@ -2313,6 +2330,36 @@ function FeedbackModal({ onClose, showToast }: { onClose: () => void; showToast:
                 maxLength={5000}
                 style={{ ...css.input, resize: 'vertical', lineHeight: 1.6 }}
             />
+
+            {feedback.length > 0 && (
+                <>
+                    <div style={{ borderTop: '1px solid var(--home-border)', paddingTop: 10, fontSize: 12, fontWeight: 700, color: 'var(--home-text-dim)' }}>
+                        📋 Phản hồi trước đây ({feedback.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+                        {feedback.map((f) => (
+                            <div key={f.id} style={{ background: 'var(--home-input)', borderRadius: 10, padding: '9px 12px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                    <span style={{ color: '#FBBF24', fontSize: 12 }}>
+                                        {'★'.repeat(f.rating)}
+                                        <span style={{ color: 'var(--home-border-strong)' }}>{'★'.repeat(5 - f.rating)}</span>
+                                    </span>
+                                    <span style={{ fontSize: 10, color: 'var(--home-text-faint)' }}>
+                                        {new Date(f.createdAt).toLocaleString('vi-VN', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                    </span>
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--home-text)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{f.content}</div>
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
         </ModalShell>
     );
 }
@@ -2322,7 +2369,6 @@ function FeedbackModal({ onClose, showToast }: { onClose: () => void; showToast:
 // ═══════════════════════════════════════════════════════════════════
 
 const globalCss = `
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
     *, *::before, *::after { box-sizing: border-box; }
     input, select, textarea, button { font-family: inherit; }
     ::-webkit-scrollbar { width: 3px; }
@@ -2375,7 +2421,7 @@ const globalCss = `
 // ═══════════════════════════════════════════════════════════════════
 
 const css: Record<string, CSSProperties> = {
-    root: { fontFamily: "'Outfit', 'Segoe UI', sans-serif", background: 'var(--home-bg)', minHeight: '100vh', color: 'var(--home-text)', position: 'relative' },
+    root: { background: 'var(--home-bg)', minHeight: '100vh', color: 'var(--home-text)', position: 'relative' },
     bgDots: {
         position: 'fixed',
         inset: 0,

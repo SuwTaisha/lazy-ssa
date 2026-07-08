@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Home;
 
 use App\Http\Controllers\Controller;
+use App\Models\Feedback;
 use App\Models\ScheduleSlot;
 use App\Models\Semester;
 use Illuminate\Http\Request;
@@ -29,6 +30,7 @@ class HomeController extends Controller
                 'notes' => (object) [],
                 'examData' => (object) [],
                 'examWeeksCount' => 2,
+                'feedback' => [],
                 'isDemo' => true,
             ]);
         }
@@ -158,6 +160,16 @@ class HomeController extends Controller
         // mở thêm tuần thi cho đủ, không giới hạn cứng ở 2 tuần nữa.
         $examWeeksCount = $maxExamWeek !== null ? max(2, $maxExamWeek - self::STUDY_WEEKS) : 2;
 
+        $feedback = Feedback::where('user_id', $user->id)
+            ->latest()
+            ->get()
+            ->map(fn ($f) => [
+                'id' => $f->id,
+                'rating' => $f->rating,
+                'content' => $f->content,
+                'createdAt' => $f->created_at->toIso8601String(),
+            ]);
+
         return Inertia::render('home/home', [
             'semesterId' => $semester->id,
             'semStart' => $semester->start_date->toDateString(),
@@ -170,6 +182,7 @@ class HomeController extends Controller
             'notes' => (object) $notes,
             'examData' => (object) $examData,
             'examWeeksCount' => $examWeeksCount,
+            'feedback' => $feedback,
             'isDemo' => false,
         ]);
     }
