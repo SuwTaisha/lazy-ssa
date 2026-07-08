@@ -155,6 +155,13 @@ function toISODate(d: Date): string {
 function fmtDMY(d: Date): string {
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
+function hexToRgba(hex: string, alpha: number): string {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0, 2), 16);
+    const g = parseInt(c.substring(2, 4), 16);
+    const b = parseInt(c.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 function isToday(d: Date): boolean {
     const n = new Date();
     return d.getDate() === n.getDate() && d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
@@ -1055,7 +1062,7 @@ function CalendarView({
                         title: dayOnline ? `${sub.name} · 🌐 Online` : sub.name,
                         start: dateStr,
                         allDay: true,
-                        backgroundColor: sub.color,
+                        backgroundColor: hexToRgba(sub.color, 0.16),
                         borderColor: sub.color,
                         extendedProps: { code, kind: 'class', isOnline: dayOnline },
                     });
@@ -1073,7 +1080,7 @@ function CalendarView({
                     start: item.startTime ? `${dateStr}T${item.startTime}` : dateStr,
                     end: item.endTime ? `${dateStr}T${item.endTime}` : undefined,
                     allDay: !item.startTime,
-                    backgroundColor: sub.color,
+                    backgroundColor: hexToRgba(sub.color, 0.16),
                     borderColor: sub.color,
                     extendedProps: { code: item.code, kind: 'class', isOnline: item.isOnline },
                 });
@@ -1091,7 +1098,7 @@ function CalendarView({
                 title: `🎯 ${sub.name} thi`,
                 start: entry.time ? `${entry.date}T${entry.time}` : entry.date,
                 allDay: !entry.time,
-                backgroundColor: '#FBBF24',
+                backgroundColor: hexToRgba('#FBBF24', 0.22),
                 borderColor: '#FBBF24',
                 extendedProps: { code, kind: 'exam', room: entry.room, type: entry.type },
             });
@@ -2385,35 +2392,79 @@ const globalCss = `
     .anim-bell    { animation: bellWig .55s ease; }
     .anim-pulse   { animation: pulse 2s ease-in-out infinite; }
 
-    /* FullCalendar theming — chỉ đổi màu/khoảng cách để khớp giao diện app, không đụng
-       vào logic/layout gốc của thư viện (đã trông giống Google Calendar sẵn). */
+    /* FullCalendar theming — bọc trong khung "cuốn lịch giấy" (card trắng, bo góc, đổ
+       bóng) và chỉnh lại độ tương phản màu/chữ cho rõ ràng ở cả light & dark mode. */
     .fc-home-wrap {
         --fc-border-color: var(--home-border);
         --fc-page-bg-color: transparent;
         --fc-neutral-bg-color: var(--home-input);
+        --fc-today-bg-color: transparent;
         width: 100%;
         max-width: 1100px;
         margin: 0 auto;
+        background: var(--home-card);
+        border: 1px solid var(--home-border);
+        border-radius: 20px;
+        padding: 18px;
+        box-shadow: 0 14px 40px var(--home-shadow);
     }
     .fc { font-family: inherit; color: var(--home-text); }
-    .fc .fc-toolbar-title { font-size: 15px; font-weight: 800; color: var(--home-text); }
-    .fc .fc-button { background: var(--home-input); border: 1px solid var(--home-border); color: var(--home-text); box-shadow: none; text-transform: capitalize; }
-    .fc .fc-button:hover { background: var(--home-border-strong); }
+    .fc .fc-toolbar { margin-bottom: 14px !important; padding-bottom: 14px; border-bottom: 1px solid var(--home-border); }
+    .fc .fc-toolbar-title { font-size: 17px; font-weight: 800; color: var(--home-text); letter-spacing: 0.2px; }
+    .fc .fc-button { background: var(--home-input); border: 1px solid var(--home-border); color: var(--home-text); box-shadow: none; text-transform: capitalize; font-weight: 600; }
+    .fc .fc-button:hover { background: var(--home-border-strong); color: var(--home-text); }
+    .fc .fc-button:focus { box-shadow: 0 0 0 3px #FF6B3530 !important; }
     .fc .fc-button:disabled { opacity: 0.4; }
+    .fc .fc-prev-button, .fc .fc-next-button { border-radius: 50% !important; width: 30px; height: 30px; padding: 0 !important; display: inline-flex; align-items: center; justify-content: center; }
+    .fc .fc-today-button { border-radius: 999px !important; padding: 6px 16px !important; }
     .fc .fc-button-primary:not(:disabled).fc-button-active { background: #FF6B35; border-color: #FF6B35; color: #fff; }
-    .fc-col-header-cell-cushion { color: var(--home-text-faint); font-size: 11px; font-weight: 700; text-decoration: none; padding: 6px 0; }
-    .fc-daygrid-day-number { color: var(--home-text); font-size: 12px; text-decoration: none; padding: 4px 6px; }
-    .fc-day-other .fc-daygrid-day-number { color: var(--home-text-faint); opacity: 0.5; }
-    .fc-day-today { background: #FF6B3510 !important; }
-    .fc-day-today .fc-daygrid-day-number { color: #FF6B35; font-weight: 800; }
-    .fc-event { border-radius: 6px; font-size: 10px; padding: 1px 4px; border-width: 1px; cursor: pointer; }
-    .fc-event-title, .fc-event-time { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
+    .fc-theme-standard th { border-color: var(--home-border); }
+    .fc-col-header { background: var(--home-input); border-radius: 10px; }
+    .fc-col-header-cell-cushion { color: var(--home-text-soft); font-size: 11px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; text-decoration: none; padding: 8px 0; }
+    .fc-day-sat .fc-col-header-cell-cushion, .fc-day-sun .fc-col-header-cell-cushion { color: #FF6B35; }
+    .fc-daygrid-day-frame { padding: 2px; }
+    .fc-daygrid-day-top { justify-content: flex-end; padding: 4px; }
+    .fc-daygrid-day-number {
+        color: var(--home-text);
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+    }
+    .fc-daygrid-day-number:hover { background: var(--home-input); }
+    .fc-day-other .fc-daygrid-day-number { color: var(--home-text-faint); }
+    .fc-day-sat, .fc-day-sun { background: var(--home-input); }
+    .fc-day-today { background: #FF6B3512 !important; }
+    .fc-day-today .fc-daygrid-day-number { background: #FF6B35; color: #fff; font-weight: 800; }
+    .fc-day-today .fc-daygrid-day-number:hover { background: #FF6B35; }
+    .fc-event {
+        border-radius: 8px;
+        font-size: 10.5px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-width: 0;
+        border-left-width: 3px;
+        cursor: pointer;
+        box-shadow: 0 1px 3px var(--home-shadow);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .fc-event:hover { transform: translateY(-1px); box-shadow: 0 4px 10px var(--home-shadow); }
+    .fc-event-title, .fc-event-time { color: var(--home-text); white-space: normal !important; overflow: visible !important; text-overflow: clip !important; font-weight: 600; }
     .fc-daygrid-event { white-space: normal !important; align-items: flex-start !important; }
-    .fc-daygrid-event-harness { margin-bottom: 1px !important; }
+    .fc-daygrid-event-harness { margin-bottom: 3px !important; }
     .fc-daygrid-more-link { color: #FF6B35; font-size: 10px; font-weight: 700; }
-    .fc-popover { background: var(--home-card); border: 1px solid var(--home-border-strong); border-radius: 10px; box-shadow: 0 10px 36px var(--home-shadow); }
-    .fc-popover-header { background: var(--home-input); color: var(--home-text); }
+    .fc-popover { background: var(--home-card); border: 1px solid var(--home-border-strong); border-radius: 14px; box-shadow: 0 10px 36px var(--home-shadow); overflow: hidden; }
+    .fc-popover-header { background: var(--home-input); color: var(--home-text); font-weight: 700; padding: 8px 10px; }
     .fc-popover-close { color: var(--home-text-faint); }
+    @media (max-width: 640px) {
+        .fc-home-wrap { padding: 10px; border-radius: 14px; }
+        .fc .fc-toolbar-title { font-size: 15px; }
+    }
 `;
 
 // ═══════════════════════════════════════════════════════════════════

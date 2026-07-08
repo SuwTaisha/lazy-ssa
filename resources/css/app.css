@@ -115,15 +115,15 @@
     --home-bg: #f2f3f9;
     --home-bg-translucent: rgba(242, 243, 249, 0.92);
     --home-card: #ffffff;
-    --home-input: #eceef5;
+    --home-input: #eaecf4;
     --home-text: #1c1c2b;
-    --home-text-soft: #44445a;
-    --home-text-dim: #6b7280;
-    --home-text-faint: #a8a8b8;
-    --home-border-faint: rgba(0, 0, 0, 0.04);
-    --home-border: rgba(0, 0, 0, 0.08);
-    --home-border-strong: rgba(0, 0, 0, 0.14);
-    --home-shadow: rgba(0, 0, 0, 0.1);
+    --home-text-soft: #40404f;
+    --home-text-dim: #5b5f70;
+    --home-text-faint: #767a8c;
+    --home-border-faint: rgba(0, 0, 0, 0.06);
+    --home-border: rgba(0, 0, 0, 0.12);
+    --home-border-strong: rgba(0, 0, 0, 0.22);
+    --home-shadow: rgba(30, 34, 60, 0.12);
 }
 
 .dark {
