@@ -4,6 +4,7 @@ use App\Http\Controllers\DayNote\DayNoteController;
 use App\Http\Controllers\Examentry\ExamEntryController;
 use App\Http\Controllers\ExamEntry\ExamEntryImportController;
 use App\Http\Controllers\Feedback\FeedbackController;
+use App\Http\Controllers\Guide\GuideController;
 use App\Http\Controllers\Home\HomeController;
 use App\Http\Controllers\Note\NoteController;
 use App\Http\Controllers\Online\OnlineDayController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\WorkShiftType\WorkShiftTypeController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/huong-dan/nhap-lich', [GuideController::class, 'icsImport'])->name('guide.ics-import');
 
 Route::middleware('auth')->group(function () {
     Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');

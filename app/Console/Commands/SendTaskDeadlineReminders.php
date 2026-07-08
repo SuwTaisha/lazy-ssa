@@ -9,22 +9,23 @@ use Illuminate\Support\Carbon;
 
 class SendTaskDeadlineReminders extends Command
 {
-    // Nhắc trước khi đến hạn tối đa 24h. Không giới hạn cận dưới (không lọc theo
-    // "deadline >= now") để bắt luôn các task đã quá hạn nhắc (vd scheduler không
-    // chạy kịp), tránh bỏ sót vĩnh viễn — whereNull('reminder_sent_at') đảm bảo
-    // mỗi task chỉ được nhắc đúng 1 lần.
-    private const HOURS_BEFORE_DEADLINE = 24;
-
     protected $signature = 'app:send-task-deadline-reminders';
 
     protected $description = 'Gửi email + push notification cho các task sắp đến hạn (chưa được nhắc)';
 
     public function handle(): void
     {
+        // Mỗi task tự chọn nhắc trước bao lâu (remind_minutes_before, phút) — task đã
+        // vào "cửa sổ nhắc" của chính nó khi deadline <= now() + remind_minutes_before.
+        // Không giới hạn cận dưới (không lọc "deadline >= now") để bắt luôn các task đã
+        // quá hạn nhắc (vd scheduler không chạy kịp), tránh bỏ sót vĩnh viễn —
+        // whereNull('reminder_sent_at') đảm bảo mỗi task chỉ được nhắc đúng 1 lần.
+        // remind_minutes_before = null nghĩa là task đó không muốn được nhắc.
         $tasks = Task::where('done', false)
             ->whereNotNull('deadline')
+            ->whereNotNull('remind_minutes_before')
             ->whereNull('reminder_sent_at')
-            ->where('deadline', '<=', Carbon::now()->addHours(self::HOURS_BEFORE_DEADLINE))
+            ->whereRaw('deadline <= DATE_ADD(NOW(), INTERVAL remind_minutes_before MINUTE)')
             ->with('semester.user')
             ->get();
 

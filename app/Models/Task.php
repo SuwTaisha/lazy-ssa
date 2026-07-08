@@ -15,11 +15,13 @@ class Task extends Model
         'subject_id',
         'text',
         'deadline',
+        'remind_minutes_before',
         'done',
     ];
 
     protected $casts = [
         'deadline' => 'datetime',
+        'remind_minutes_before' => 'integer',
         'done' => 'boolean',
         'reminder_sent_at' => 'datetime',
     ];

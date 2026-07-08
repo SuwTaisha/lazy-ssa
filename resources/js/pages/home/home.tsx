@@ -24,6 +24,7 @@ import {
     ClipboardList,
     Clock,
     Globe,
+    HelpCircle,
     ListChecks,
     LogIn,
     LogOut,
@@ -204,6 +205,19 @@ const ALL_DAY_NAMES: Record<number, string> = {
     7: 'Chủ Nhật',
 };
 const STUDY_WEEKS = 7;
+
+// Tuỳ chọn nhắc deadline khi tạo task — value rỗng ('') = không nhắc, còn lại là số phút
+// trước deadline (khớp remind_minutes_before ở backend, cùng đơn vị nên khỏi phải quy đổi).
+const REMIND_PRESETS: { label: string; minutes: number | null }[] = [
+    { label: 'Không nhắc', minutes: null },
+    { label: 'Trước 45 phút', minutes: 45 },
+    { label: 'Trước 1 giờ', minutes: 60 },
+    { label: 'Trước 3 giờ', minutes: 180 },
+    { label: 'Trước 12 giờ', minutes: 720 },
+    { label: 'Trước 1 ngày', minutes: 1440 },
+    { label: 'Trước 2 ngày', minutes: 2880 },
+    { label: 'Trước 3 ngày', minutes: 4320 },
+];
 // Số tuần thi không còn cố định = 2 nữa — import lịch thi thật có thể trải dài hơn,
 // nên tổng số tuần (TOTAL_WEEKS = STUDY_WEEKS + examWeeksCount) được tính động từ server.
 
@@ -1840,6 +1854,7 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
     const [newSub, setNewSub] = useState<string>(subjects[0]?.id || '');
     const [newText, setNewText] = useState<string>('');
     const [newDl, setNewDl] = useState<string>('');
+    const [newRemind, setNewRemind] = useState<string>('1440');
     const [filter, setFilter] = useState<string>('ALL');
 
     useEffect(() => {
@@ -1852,7 +1867,7 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
         if (!newText.trim()) return;
         router.post(
             '/tasks',
-            { subject: newSub, text: newText.trim(), deadline: newDl || null },
+            { subject: newSub, text: newText.trim(), deadline: newDl || null, remind_minutes_before: newDl && newRemind ? Number(newRemind) : null },
             {
                 preserveScroll: true,
                 preserveState: true,
@@ -1905,6 +1920,18 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
                         Thêm
                     </button>
                 </div>
+                {newDl && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--home-text-dim)' }}>
+                        <Bell size={12} strokeWidth={2.4} /> Nhắc deadline
+                        <select value={newRemind} onChange={(e) => setNewRemind(e.target.value)} style={{ ...css.select, flex: 1 }}>
+                            {REMIND_PRESETS.map((p) => (
+                                <option key={p.label} value={p.minutes ?? ''}>
+                                    {p.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -2159,50 +2186,67 @@ function SettingsTab({
                 <div style={css.cardTitle}>
                     <SettingsIcon size={15} strokeWidth={2.4} /> Tuỳ Chỉnh
                 </div>
-                {[
-                    { icon: BookOpen, label: 'Quản lý môn học', sub: 'Thêm, sửa, xóa, đổi màu môn', id: 'subjects' },
-                    { icon: CalendarDays, label: 'Lịch học theo ngày', sub: 'Chỉnh slot môn cho từng thứ', id: 'schedule' },
-                    { icon: Briefcase, label: 'Ca làm cố định', sub: 'Quản lý ca làm, thêm ca theo ngày', id: 'workshifts' },
-                    { icon: MessageCircle, label: 'Gửi phản hồi', sub: 'Góp ý, báo lỗi cho ứng dụng', id: 'feedback' },
-                ].map((item) => (
-                    <button
-                        key={item.id}
-                        onClick={() => openModal(item.id)}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 12,
-                            width: '100%',
-                            background: 'var(--home-input)',
-                            border: '1px solid var(--home-border)',
-                            borderRadius: 10,
-                            padding: '11px 13px',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                        }}
-                    >
-                        <span
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                width: 34,
-                                height: 34,
-                                borderRadius: 9,
-                                flexShrink: 0,
-                                background: '#FF6B3514',
-                                color: '#FF6B35',
-                            }}
-                        >
-                            <item.icon size={17} strokeWidth={2.2} />
-                        </span>
-                        <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--home-text)' }}>{item.label}</div>
-                            <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 1 }}>{item.sub}</div>
-                        </div>
-                        <ChevronRight size={16} color="var(--home-text-faint)" />
-                    </button>
-                ))}
+                {(
+                    [
+                        { icon: BookOpen, label: 'Quản lý môn học', sub: 'Thêm, sửa, xóa, đổi màu môn', id: 'subjects' },
+                        { icon: CalendarDays, label: 'Lịch học theo ngày', sub: 'Chỉnh slot môn cho từng thứ', id: 'schedule' },
+                        { icon: Briefcase, label: 'Ca làm cố định', sub: 'Quản lý ca làm, thêm ca theo ngày', id: 'workshifts' },
+                        { icon: MessageCircle, label: 'Gửi phản hồi', sub: 'Góp ý, báo lỗi cho ứng dụng', id: 'feedback' },
+                        {
+                            icon: HelpCircle,
+                            label: 'Hướng dẫn nhập lịch từ FAP',
+                            sub: 'Cách lấy file .ics và nhập vào hệ thống',
+                            href: '/huong-dan/nhap-lich',
+                        },
+                    ] as { icon: React.ElementType; label: string; sub: string; id?: string; href?: string }[]
+                ).map((item) => {
+                    const itemStyle: React.CSSProperties = {
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        width: '100%',
+                        background: 'var(--home-input)',
+                        border: '1px solid var(--home-border)',
+                        borderRadius: 10,
+                        padding: '11px 13px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        textDecoration: 'none',
+                    };
+                    const inner = (
+                        <>
+                            <span
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 9,
+                                    flexShrink: 0,
+                                    background: '#FF6B3514',
+                                    color: '#FF6B35',
+                                }}
+                            >
+                                <item.icon size={17} strokeWidth={2.2} />
+                            </span>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--home-text)' }}>{item.label}</div>
+                                <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 1 }}>{item.sub}</div>
+                            </div>
+                            <ChevronRight size={16} color="var(--home-text-faint)" />
+                        </>
+                    );
+                    return item.href ? (
+                        <Link key={item.label} href={item.href} style={itemStyle}>
+                            {inner}
+                        </Link>
+                    ) : (
+                        <button key={item.id} onClick={() => openModal(item.id as string)} style={itemStyle}>
+                            {inner}
+                        </button>
+                    );
+                })}
             </div>
 
             <div style={css.card}>
@@ -2504,6 +2548,12 @@ function ExamModal({
                     <Upload size={12} strokeWidth={2.4} /> {importing ? 'Đang nhập...' : 'Nhập file .ics'}
                 </button>
             </div>
+            <Link
+                href="/huong-dan/nhap-lich"
+                style={{ fontSize: 11, color: 'var(--home-text-faint)', textDecoration: 'underline', alignSelf: 'flex-end' }}
+            >
+                Chưa có file .ics? Xem hướng dẫn
+            </Link>
 
             <div
                 style={{
@@ -3294,6 +3344,12 @@ function ScheduleModal({
                     <Upload size={12} strokeWidth={2.4} /> {importing ? 'Đang nhập...' : 'Nhập file .ics'}
                 </button>
             </div>
+            <Link
+                href="/huong-dan/nhap-lich"
+                style={{ fontSize: 11, color: 'var(--home-text-faint)', textDecoration: 'underline', alignSelf: 'flex-end' }}
+            >
+                Chưa có file .ics? Xem hướng dẫn
+            </Link>
             <div style={{ position: 'relative' }}>
                 <Search
                     size={14}
@@ -3395,6 +3451,7 @@ function DayActionsModal({
     const [taskSubject, setTaskSubject] = useState<string>(defaultTaskSubject);
     const [taskText, setTaskText] = useState<string>('');
     const [taskDeadline, setTaskDeadline] = useState<string>(`${dateStr}T23:59`);
+    const [taskRemind, setTaskRemind] = useState<string>('1440');
     const [shiftStart, setShiftStart] = useState<string>('08:00');
     const [shiftEnd, setShiftEnd] = useState<string>('17:00');
     const [saving, setSaving] = useState(false);
@@ -3451,7 +3508,12 @@ function DayActionsModal({
         setSaving(true);
         router.post(
             '/tasks',
-            { subject: taskSubject, text: taskText.trim(), deadline: taskDeadline || null },
+            {
+                subject: taskSubject,
+                text: taskText.trim(),
+                deadline: taskDeadline || null,
+                remind_minutes_before: taskDeadline && taskRemind ? Number(taskRemind) : null,
+            },
             {
                 preserveScroll: true,
                 preserveState: true,
@@ -3720,6 +3782,18 @@ function DayActionsModal({
                         style={css.input}
                     />
                     <input type="datetime-local" value={taskDeadline} onChange={(e) => setTaskDeadline(e.target.value)} style={css.input} />
+                    {taskDeadline && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--home-text-dim)' }}>
+                            <Bell size={12} strokeWidth={2.4} /> Nhắc deadline
+                            <select value={taskRemind} onChange={(e) => setTaskRemind(e.target.value)} style={{ ...css.select, flex: 1 }}>
+                                {REMIND_PRESETS.map((p) => (
+                                    <option key={p.label} value={p.minutes ?? ''}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    )}
                 </>
             )}
 

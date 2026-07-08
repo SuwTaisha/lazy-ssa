@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Semester;
 use App\Models\Subject;
 use App\Models\Task;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class TaskController extends Controller
 {
@@ -17,6 +17,7 @@ class TaskController extends Controller
             'subject' => ['nullable', 'string'],
             'text' => ['required', 'string', 'max:255'],
             'deadline' => ['nullable', 'date'],
+            'remind_minutes_before' => ['nullable', 'integer', 'min:1', 'max:43200'],
         ]);
 
         $semester = $this->currentSemester($request);
@@ -33,6 +34,7 @@ class TaskController extends Controller
             'subject_id' => $subjectId,
             'text' => $data['text'],
             'deadline' => $data['deadline'] ?? null,
+            'remind_minutes_before' => $data['remind_minutes_before'] ?? null,
             'done' => false,
         ]);
 
