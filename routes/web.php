@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Examentry\ExamEntryController;
 use App\Http\Controllers\ExamEntry\ExamEntryImportController;
+use App\Http\Controllers\Feedback\FeedbackController;
 use App\Http\Controllers\Home\HomeController;
 use App\Http\Controllers\Note\NoteController;
 use App\Http\Controllers\Online\OnlineDayController;
@@ -32,6 +33,8 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/webpush/subscribe', [PushSubscriptionController::class, 'store'])->name('webpush.subscribe');
     Route::delete('/webpush/subscribe', [PushSubscriptionController::class, 'destroy'])->name('webpush.unsubscribe');
+
+    Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
 });
 
 require __DIR__.'/auth.php';

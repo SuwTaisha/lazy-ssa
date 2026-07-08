@@ -4,6 +4,10 @@ import type { FormDataConvertible } from '@inertiajs/core';
 import { Link, router, usePage } from '@inertiajs/react';
 import React, { CSSProperties, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useAppearance } from '@/hooks/use-appearance';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import viLocale from '@fullcalendar/core/locales/vi';
 
 // Inertia's router.put/post yêu cầu payload thoả FormDataConvertible (index signature).
 // Các type của app (Subject[], Schedule, OnlineDays, ExamData) đã có shape cụ thể nên
@@ -444,6 +448,7 @@ export default function Home() {
                     showToast={showToast}
                 />
             )}
+            {modal === 'feedback' && <FeedbackModal onClose={closeModal} showToast={showToast} />}
             {modal && modal.startsWith('note:') && semesterId && (
                 <NoteModal
                     subjectId={modal.slice(5)}
@@ -674,54 +679,93 @@ function ScheduleTab({
 }: ScheduleTabProps) {
     const monday = getWeekMonday(semStart, weekView);
     const isExam = weekView > STUDY_WEEKS;
+    const [viewMode, setViewMode] = useState<'week' | 'calendar'>('week');
 
     return (
         <div style={css.tab} className="anim-fadeup">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.max(1, w - 1))}>
-                    ‹
-                </button>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                        {isExam ? `🎯 TUẦN THI ${weekView - STUDY_WEEKS}` : `📚 TUẦN ${weekView}`}
-                        {weekView === currentWeek && <span style={css.nowTag}>Hiện tại</span>}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 2 }}>
-                        {fmtDMY(monday)} – {fmtDMY(getDayDate(monday, 5))}
-                    </div>
-                </div>
-                <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.min(totalWeeks, w + 1))}>
-                    ›
-                </button>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                {(
+                    [
+                        ['week', '📋 Theo tuần'],
+                        ['calendar', '📅 Lịch'],
+                    ] as [typeof viewMode, string][]
+                ).map(([mode, label]) => (
+                    <button
+                        key={mode}
+                        onClick={() => setViewMode(mode)}
+                        style={{
+                            ...css.chip,
+                            padding: '6px 14px',
+                            fontSize: 12,
+                            background: viewMode === mode ? '#FF6B35' : 'transparent',
+                            color: viewMode === mode ? '#fff' : 'var(--home-text-dim)',
+                            border: `1px solid ${viewMode === mode ? 'transparent' : 'var(--home-border-strong)'}`,
+                        }}
+                    >
+                        {label}
+                    </button>
+                ))}
             </div>
 
-            <WeekPills weekView={weekView} setWeekView={setWeekView} currentWeek={currentWeek} totalWeeks={totalWeeks} />
-
-            {!isExam && (
-                <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-                    {[
-                        ['#00C6FF', '🌐 Online'],
-                        ['#FF6B35', '🏫 Offline'],
-                    ].map(([c, l]) => (
-                        <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--home-text-dim)' }}>
-                            <div style={{ width: 7, height: 7, borderRadius: '50%', background: c }} />
-                            {l}
+            {viewMode === 'week' ? (
+                <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.max(1, w - 1))}>
+                            ‹
+                        </button>
+                        <div style={{ flex: 1, textAlign: 'center' }}>
+                            <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                                {isExam ? `🎯 TUẦN THI ${weekView - STUDY_WEEKS}` : `📚 TUẦN ${weekView}`}
+                                {weekView === currentWeek && <span style={css.nowTag}>Hiện tại</span>}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 2 }}>
+                                {fmtDMY(monday)} – {fmtDMY(getDayDate(monday, 5))}
+                            </div>
                         </div>
-                    ))}
-                </div>
-            )}
+                        <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.min(totalWeeks, w + 1))}>
+                            ›
+                        </button>
+                    </div>
 
-            {isExam ? (
-                <ExamWeek weekView={weekView} examData={examData} subjects={subjects} openModal={openModal} notes={notes} />
+                    <WeekPills weekView={weekView} setWeekView={setWeekView} currentWeek={currentWeek} totalWeeks={totalWeeks} />
+
+                    {!isExam && (
+                        <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+                            {[
+                                ['#00C6FF', '🌐 Online'],
+                                ['#FF6B35', '🏫 Offline'],
+                            ].map(([c, l]) => (
+                                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--home-text-dim)' }}>
+                                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: c }} />
+                                    {l}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {isExam ? (
+                        <ExamWeek weekView={weekView} examData={examData} subjects={subjects} openModal={openModal} notes={notes} />
+                    ) : (
+                        <StudyWeek
+                            weekView={weekView}
+                            monday={monday}
+                            subjectMap={subjectMap}
+                            schedule={schedule}
+                            scheduleByDate={scheduleByDate}
+                            onlineDays={onlineDays}
+                            notes={notes}
+                            openModal={openModal}
+                        />
+                    )}
+                </>
             ) : (
-                <StudyWeek
-                    weekView={weekView}
-                    monday={monday}
+                <CalendarView
+                    semStart={semStart}
                     subjectMap={subjectMap}
                     schedule={schedule}
                     scheduleByDate={scheduleByDate}
                     onlineDays={onlineDays}
-                    notes={notes}
+                    examData={examData}
                     openModal={openModal}
                 />
             )}
@@ -942,6 +986,126 @@ function ExamWeek({
                     );
                 })}
             </div>
+        </div>
+    );
+}
+
+interface CalendarEventProps {
+    code: string;
+    kind: 'class' | 'exam';
+    isOnline?: boolean | null;
+    room?: string;
+    type?: string;
+}
+
+function CalendarView({
+    semStart,
+    subjectMap,
+    schedule,
+    scheduleByDate,
+    onlineDays,
+    examData,
+    openModal,
+}: {
+    semStart: string;
+    subjectMap: Record<string, Subject>;
+    schedule: Schedule;
+    scheduleByDate: ScheduleByDate;
+    onlineDays: OnlineDays;
+    examData: ExamData;
+    openModal: (id: string) => void;
+}) {
+    // FullCalendar cần danh sách event tĩnh (không tính theo từng ngày một như bản tự vẽ
+    // cũ) — build 1 lần: (1) lịch lặp lại hàng tuần chỉ trong phạm vi STUDY_WEEKS tuần học
+    // đầu tiên của học kỳ, (2) buổi học có ngày cụ thể (import .ics/tạo tay), (3) lịch thi.
+    const events = useMemo(() => {
+        const list: {
+            id: string;
+            title: string;
+            start: string;
+            end?: string;
+            allDay?: boolean;
+            backgroundColor: string;
+            borderColor: string;
+            extendedProps: CalendarEventProps;
+        }[] = [];
+
+        const semStartMonday = parseLocalDate(semStart);
+        for (let week = 0; week < STUDY_WEEKS; week++) {
+            const weekOnline = onlineDays[week + 1] || [];
+            for (let dow = 1; dow <= 5; dow++) {
+                const date = new Date(semStartMonday);
+                date.setDate(date.getDate() + week * 7 + (dow - 1));
+                const dateStr = toISODate(date);
+                const dayOnline = weekOnline.includes(dow);
+                (schedule[dow] || []).forEach((code, i) => {
+                    const sub = subjectMap[code];
+                    if (!sub) return;
+                    list.push({
+                        id: `tpl-${week}-${dow}-${i}`,
+                        title: dayOnline ? `${sub.name} · 🌐 Online` : sub.name,
+                        start: dateStr,
+                        allDay: true,
+                        backgroundColor: sub.color,
+                        borderColor: sub.color,
+                        extendedProps: { code, kind: 'class', isOnline: dayOnline },
+                    });
+                });
+            }
+        }
+
+        Object.entries(scheduleByDate).forEach(([dateStr, items]) => {
+            items.forEach((item, i) => {
+                const sub = subjectMap[item.code];
+                if (!sub) return;
+                list.push({
+                    id: `dated-${dateStr}-${i}`,
+                    title: item.isOnline ? `${sub.name} · 🌐 Online` : sub.name,
+                    start: item.startTime ? `${dateStr}T${item.startTime}` : dateStr,
+                    end: item.endTime ? `${dateStr}T${item.endTime}` : undefined,
+                    allDay: !item.startTime,
+                    backgroundColor: sub.color,
+                    borderColor: sub.color,
+                    extendedProps: { code: item.code, kind: 'class', isOnline: item.isOnline },
+                });
+            });
+        });
+
+        Object.entries(examData).forEach(([key, entry]) => {
+            const m = key.match(/^w\d+_(.+)$/);
+            if (!m || !entry.date) return;
+            const code = m[1];
+            const sub = subjectMap[code];
+            if (!sub) return;
+            list.push({
+                id: `exam-${key}`,
+                title: `🎯 ${sub.name} thi`,
+                start: entry.time ? `${entry.date}T${entry.time}` : entry.date,
+                allDay: !entry.time,
+                backgroundColor: '#FBBF24',
+                borderColor: '#FBBF24',
+                extendedProps: { code, kind: 'exam', room: entry.room, type: entry.type },
+            });
+        });
+
+        return list;
+    }, [semStart, schedule, scheduleByDate, onlineDays, examData, subjectMap]);
+
+    return (
+        <div className="fc-home-wrap">
+            <FullCalendar
+                plugins={[dayGridPlugin, interactionPlugin]}
+                initialView="dayGridMonth"
+                locale={viLocale}
+                headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+                height="auto"
+                dayMaxEvents={3}
+                events={events}
+                eventClick={(info) => {
+                    const code = (info.event.extendedProps as CalendarEventProps).code;
+                    openModal(`note:${code}`);
+                }}
+            />
         </div>
     );
 }
@@ -1260,6 +1424,7 @@ function SettingsTab({
                 {[
                     { icon: '📚', label: 'Quản lý môn học', sub: 'Thêm, sửa, xóa, đổi màu môn', id: 'subjects' },
                     { icon: '🗓', label: 'Lịch học theo ngày', sub: 'Chỉnh slot môn cho từng thứ', id: 'schedule' },
+                    { icon: '💬', label: 'Gửi phản hồi', sub: 'Góp ý, báo lỗi cho ứng dụng', id: 'feedback' },
                 ].map((item) => (
                     <button
                         key={item.id}
@@ -2071,6 +2236,87 @@ function ScheduleModal({
     );
 }
 
+function FeedbackModal({ onClose, showToast }: { onClose: () => void; showToast: (msg: string) => void }) {
+    const [rating, setRating] = useState<number>(0);
+    const [content, setContent] = useState<string>('');
+    const [saving, setSaving] = useState(false);
+
+    const submitFeedback = () => {
+        if (rating < 1 || rating > 5) {
+            showToast('⚠️ Vui lòng chọn số sao đánh giá');
+            return;
+        }
+        if (!content.trim()) {
+            showToast('⚠️ Vui lòng nhập nội dung phản hồi');
+            return;
+        }
+        setSaving(true);
+        router.post(
+            '/feedback',
+            { rating, content: content.trim() },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    showToast('✅ Cảm ơn bạn đã gửi phản hồi!');
+                    onClose();
+                },
+                onError: () => showToast('❌ Không thể gửi phản hồi'),
+                onFinish: () => setSaving(false),
+            },
+        );
+    };
+
+    return (
+        <ModalShell
+            title="💬 Gửi Phản Hồi"
+            onClose={onClose}
+            footer={
+                <>
+                    <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
+                        Hủy
+                    </button>
+                    <button
+                        style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={submitFeedback}
+                        disabled={saving}
+                    >
+                        📤 {saving ? 'Đang gửi...' : 'Gửi'}
+                    </button>
+                </>
+            }
+        >
+            <div style={{ fontSize: 12, color: 'var(--home-text-dim)' }}>Bạn đánh giá ứng dụng thế nào?</div>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                        key={n}
+                        onClick={() => setRating(n)}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 30,
+                            lineHeight: 1,
+                            color: n <= rating ? '#FBBF24' : 'var(--home-border-strong)',
+                        }}
+                    >
+                        ★
+                    </button>
+                ))}
+            </div>
+            <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Góp ý, báo lỗi, hoặc đề xuất tính năng mới..."
+                rows={7}
+                maxLength={5000}
+                style={{ ...css.input, resize: 'vertical', lineHeight: 1.6 }}
+            />
+        </ModalShell>
+    );
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // GLOBAL CSS
 // ═══════════════════════════════════════════════════════════════════
@@ -2092,6 +2338,36 @@ const globalCss = `
     .anim-slideup { animation: slideUp .28s ease forwards; }
     .anim-bell    { animation: bellWig .55s ease; }
     .anim-pulse   { animation: pulse 2s ease-in-out infinite; }
+
+    /* FullCalendar theming — chỉ đổi màu/khoảng cách để khớp giao diện app, không đụng
+       vào logic/layout gốc của thư viện (đã trông giống Google Calendar sẵn). */
+    .fc-home-wrap {
+        --fc-border-color: var(--home-border);
+        --fc-page-bg-color: transparent;
+        --fc-neutral-bg-color: var(--home-input);
+        width: 100%;
+        max-width: 1100px;
+        margin: 0 auto;
+    }
+    .fc { font-family: inherit; color: var(--home-text); }
+    .fc .fc-toolbar-title { font-size: 15px; font-weight: 800; color: var(--home-text); }
+    .fc .fc-button { background: var(--home-input); border: 1px solid var(--home-border); color: var(--home-text); box-shadow: none; text-transform: capitalize; }
+    .fc .fc-button:hover { background: var(--home-border-strong); }
+    .fc .fc-button:disabled { opacity: 0.4; }
+    .fc .fc-button-primary:not(:disabled).fc-button-active { background: #FF6B35; border-color: #FF6B35; color: #fff; }
+    .fc-col-header-cell-cushion { color: var(--home-text-faint); font-size: 11px; font-weight: 700; text-decoration: none; padding: 6px 0; }
+    .fc-daygrid-day-number { color: var(--home-text); font-size: 12px; text-decoration: none; padding: 4px 6px; }
+    .fc-day-other .fc-daygrid-day-number { color: var(--home-text-faint); opacity: 0.5; }
+    .fc-day-today { background: #FF6B3510 !important; }
+    .fc-day-today .fc-daygrid-day-number { color: #FF6B35; font-weight: 800; }
+    .fc-event { border-radius: 6px; font-size: 10px; padding: 1px 4px; border-width: 1px; cursor: pointer; }
+    .fc-event-title, .fc-event-time { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
+    .fc-daygrid-event { white-space: normal !important; align-items: flex-start !important; }
+    .fc-daygrid-event-harness { margin-bottom: 1px !important; }
+    .fc-daygrid-more-link { color: #FF6B35; font-size: 10px; font-weight: 700; }
+    .fc-popover { background: var(--home-card); border: 1px solid var(--home-border-strong); border-radius: 10px; box-shadow: 0 10px 36px var(--home-shadow); }
+    .fc-popover-header { background: var(--home-input); color: var(--home-text); }
+    .fc-popover-close { color: var(--home-text-faint); }
 `;
 
 // ═══════════════════════════════════════════════════════════════════
