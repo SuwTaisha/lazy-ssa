@@ -13,6 +13,8 @@ use App\Http\Controllers\Schedule\ScheduleSlotController;
 use App\Http\Controllers\Semester\SemesterController;
 use App\Http\Controllers\Subject\SubjectController;
 use App\Http\Controllers\Task\TaskController;
+use App\Http\Controllers\WorkShift\WorkShiftController;
+use App\Http\Controllers\WorkShiftType\WorkShiftTypeController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -34,6 +36,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/semesters/{semester}/online-days', [OnlineDayController::class, 'sync'])->name('online-days.sync');
     Route::put('/semesters/{semester}/exam-entries', [ExamEntryController::class, 'sync'])->name('exam-entries.sync');
     Route::post('/semesters/{semester}/exam-entries/import', [ExamEntryImportController::class, 'import'])->name('exam-entries.import');
+    Route::put('/semesters/{semester}/work-shift-types', [WorkShiftTypeController::class, 'sync'])->name('work-shift-types.sync');
+    Route::post('/semesters/{semester}/work-shifts', [WorkShiftController::class, 'store'])->name('work-shifts.store');
+    Route::delete('/semesters/{semester}/work-shifts/{workShift}', [WorkShiftController::class, 'destroy'])->name('work-shifts.destroy');
 
     Route::post('/webpush/subscribe', [PushSubscriptionController::class, 'store'])->name('webpush.subscribe');
     Route::delete('/webpush/subscribe', [PushSubscriptionController::class, 'destroy'])->name('webpush.unsubscribe');

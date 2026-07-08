@@ -45,4 +45,14 @@ class Semester extends Model
     {
         return $this->hasMany(DayNote::class);
     }
+
+    public function workShiftTypes(): HasMany
+    {
+        return $this->hasMany(WorkShiftType::class);
+    }
+
+    public function workShifts(): HasMany
+    {
+        return $this->hasMany(WorkShift::class);
+    }
 }

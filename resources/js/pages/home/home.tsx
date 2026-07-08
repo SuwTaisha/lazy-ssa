@@ -13,6 +13,7 @@ import {
     BarChart3,
     Bell,
     BookOpen,
+    Briefcase,
     Calendar,
     CalendarDays,
     CalendarPlus,
@@ -82,6 +83,13 @@ interface ScheduleSession {
 }
 type ScheduleSlotsBySubject = Record<string, ScheduleSession[]>; // subjectCode -> toàn bộ buổi học (kể cả quá khứ)
 
+// Phải khai báo cố định ở module-level (không tạo mới mỗi lần render trong JSX) — FullCalendar
+// coi `plugins`/`headerToolbar` là options thay đổi mỗi khi nhận reference mới, dẫn tới việc
+// nó tự re-init lại toàn bộ calendar bất cứ khi nào component cha re-render (kể cả khi
+// không có gì thực sự đổi), có thể làm hỏng tương tác đang dở dang như popover "+n more".
+const CALENDAR_PLUGINS = [dayGridPlugin, interactionPlugin];
+const CALENDAR_HEADER_TOOLBAR = { left: 'prev,next today', center: 'title', right: '' };
+
 // Khung giờ chuẩn theo slot của FPT — đúng theo ScheduleSlotController::SLOT_TIMES ở backend,
 // chỉ để hiển thị (giờ thật do backend tính, không tin giờ client tự gửi lên).
 const SLOT_TIMES: Record<number, [string, string]> = {
@@ -104,6 +112,20 @@ interface Task {
 type Notes = Record<string, string>; // subjectCode -> note text
 type DayNotes = Record<string, string>; // 'YYYY-MM-DD' -> note text riêng của ngày đó
 type NoteDates = Record<string, string>; // subjectCode -> 'YYYY-MM-DD' lần sửa ghi chú gần nhất
+
+interface WorkShiftTypeItem {
+    id: number;
+    name: string;
+    start: string;
+    end: string;
+    daysOfWeek: number[];
+}
+interface WorkShiftItem {
+    id: number;
+    date: string;
+    start: string;
+    end: string;
+}
 
 interface FeedbackItem {
     id: number;
@@ -141,6 +163,8 @@ interface PageProps {
     examData: ExamData;
     examWeeksCount: number;
     feedback: FeedbackItem[];
+    workShiftTypes: WorkShiftTypeItem[];
+    workShifts: WorkShiftItem[];
     isDemo: boolean;
     vapidPublicKey: string | null;
     [key: string]: unknown;
@@ -169,6 +193,16 @@ const PRESET_COLORS = [
 ];
 
 const DAY_NAMES: Record<number, string> = { 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6' };
+// Ca làm không bó buộc theo lịch học (Thứ 2 - Thứ 6) như môn học -> cần đủ cả cuối tuần.
+const ALL_DAY_NAMES: Record<number, string> = {
+    1: 'Thứ 2',
+    2: 'Thứ 3',
+    3: 'Thứ 4',
+    4: 'Thứ 5',
+    5: 'Thứ 6',
+    6: 'Thứ 7',
+    7: 'Chủ Nhật',
+};
 const STUDY_WEEKS = 7;
 // Số tuần thi không còn cố định = 2 nữa — import lịch thi thật có thể trải dài hơn,
 // nên tổng số tuần (TOTAL_WEEKS = STUDY_WEEKS + examWeeksCount) được tính động từ server.
@@ -252,6 +286,8 @@ export default function Home() {
         examData,
         examWeeksCount,
         feedback,
+        workShiftTypes,
+        workShifts,
         isDemo,
         vapidPublicKey,
     } = usePage<PageProps>().props;
@@ -459,6 +495,9 @@ export default function Home() {
                         notes={notes}
                         noteDates={noteDates}
                         dayNotes={dayNotes}
+                        tasks={tasks}
+                        workShiftTypes={workShiftTypes}
+                        workShifts={workShifts}
                         semesterId={semesterId}
                         openModal={openModal}
                         showToast={showToast}
@@ -510,11 +549,22 @@ export default function Home() {
                     showToast={showToast}
                 />
             )}
+            {modal === 'workshifts' && semesterId && (
+                <WorkShiftTypesModal
+                    workShiftTypes={workShiftTypes}
+                    workShifts={workShifts}
+                    semesterId={semesterId}
+                    onClose={closeModal}
+                    showToast={showToast}
+                />
+            )}
             {modal === 'feedback' && <FeedbackModal feedback={feedback} onClose={closeModal} showToast={showToast} />}
             {modal && modal.startsWith('day:') && semesterId && (
                 <DayActionsModal
                     dateStr={modal.slice(4)}
                     subjects={subjects}
+                    schedule={schedule}
+                    scheduleByDate={scheduleByDate}
                     scheduleSlotsBySubject={scheduleSlotsBySubject}
                     dayNotes={dayNotes}
                     semesterId={semesterId}
@@ -737,6 +787,9 @@ interface ScheduleTabProps {
     notes: Notes;
     noteDates: NoteDates;
     dayNotes: DayNotes;
+    tasks: Task[];
+    workShiftTypes: WorkShiftTypeItem[];
+    workShifts: WorkShiftItem[];
     semesterId?: number;
     openModal: (id: string) => void;
     showToast: (msg: string) => void;
@@ -757,6 +810,9 @@ function ScheduleTab({
     notes,
     noteDates,
     dayNotes,
+    tasks,
+    workShiftTypes,
+    workShifts,
     semesterId,
     openModal,
     showToast,
@@ -849,6 +905,9 @@ function ScheduleTab({
                             scheduleByDate={scheduleByDate}
                             onlineDays={onlineDays}
                             notes={notes}
+                            tasks={tasks}
+                            workShiftTypes={workShiftTypes}
+                            workShifts={workShifts}
                             openModal={openModal}
                         />
                     )}
@@ -861,6 +920,9 @@ function ScheduleTab({
                     scheduleByDate={scheduleByDate}
                     onlineDays={onlineDays}
                     examData={examData}
+                    tasks={tasks}
+                    workShiftTypes={workShiftTypes}
+                    workShifts={workShifts}
                     openModal={openModal}
                 />
             )}
@@ -1091,6 +1153,9 @@ function StudyWeek({
     scheduleByDate,
     onlineDays,
     notes,
+    tasks,
+    workShiftTypes,
+    workShifts,
     openModal,
 }: {
     weekView: number;
@@ -1100,6 +1165,9 @@ function StudyWeek({
     scheduleByDate: ScheduleByDate;
     onlineDays: OnlineDays;
     notes: Notes;
+    tasks: Task[];
+    workShiftTypes: WorkShiftTypeItem[];
+    workShifts: WorkShiftItem[];
     openModal: (id: string) => void;
 }) {
     const onDays = onlineDays[weekView] || [];
@@ -1115,10 +1183,19 @@ function StudyWeek({
                 // Buổi lặp lại hàng tuần (tạo tay) + buổi đúng ngày cụ thể (import .ics) của
                 // riêng ngày này, in chung lên 1 danh sách cho ô lịch của ngày đó.
                 const dated = scheduleByDate[dateStr] || [];
-                const items: { code: string; slotOrder?: number; isOnline?: boolean | null }[] = [
+                const items: { code: string; slotOrder?: number; isOnline?: boolean | null; startTime?: string | null; endTime?: string | null }[] = [
                     ...(schedule[dow] || []).map((code) => ({ code })),
                     ...dated,
                 ];
+                // Ca làm của đúng ngày này: ca một-lần (work_shifts) + ca cố định lặp theo
+                // thứ (work_shift_types.daysOfWeek) áp thẳng vào ngày trong tuần tương ứng.
+                const dayShifts = [
+                    ...workShifts.filter((s) => s.date === dateStr).map((s) => ({ key: `ws-${s.id}`, start: s.start, end: s.end })),
+                    ...workShiftTypes.filter((t) => t.daysOfWeek.includes(dow)).map((t) => ({ key: `wst-${t.id}`, start: t.start, end: t.end })),
+                ];
+                const classTimeRanges = items
+                    .filter((item) => subjectMap[item.code])
+                    .map((item, i) => resolveClassTimes(item.startTime, item.endTime, item.slotOrder ?? i + 1));
                 return (
                     <div key={dow} style={{ ...css.card, ...(today ? { border: '1px solid #FF6B3540', boxShadow: '0 0 20px #FF6B3310' } : {}) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -1155,6 +1232,11 @@ function StudyWeek({
                                 if (!sub) return null;
                                 const hasNote = !!(notes[item.code] && notes[item.code].trim());
                                 const online = item.isOnline ?? dayFallbackOnline;
+                                const deadlineTask = tasks.find(
+                                    (t) => !t.done && t.subject === item.code && t.deadline && t.deadline.slice(0, 10) === dateStr,
+                                );
+                                const [classStart, classEnd] = resolveClassTimes(item.startTime, item.endTime, item.slotOrder ?? i + 1);
+                                const hasConflict = dayShifts.some((s) => timeRangesOverlap(classStart, classEnd, s.start, s.end));
                                 return (
                                     <div
                                         key={i}
@@ -1163,11 +1245,54 @@ function StudyWeek({
                                             padding: '8px 11px',
                                             borderLeft: `3px solid ${sub.color}`,
                                             background: sub.color + '14',
+                                            ...(hasConflict
+                                                ? { boxShadow: '0 0 0 2px #EF4444' }
+                                                : deadlineTask
+                                                  ? { boxShadow: '0 0 0 2px #FBBF2470' }
+                                                  : {}),
                                         }}
                                     >
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                                             <span style={{ color: sub.color, fontWeight: 800, fontSize: 13 }}>{sub.name}</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                {hasConflict && (
+                                                    <span
+                                                        title="Trùng giờ với ca làm!"
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 3,
+                                                            fontSize: 9,
+                                                            fontWeight: 700,
+                                                            padding: '2px 7px',
+                                                            borderRadius: 20,
+                                                            background: '#EF444418',
+                                                            color: '#EF4444',
+                                                            border: '1px solid #EF444450',
+                                                        }}
+                                                    >
+                                                        <Briefcase size={10} strokeWidth={2.6} /> Trùng ca làm
+                                                    </span>
+                                                )}
+                                                {deadlineTask && (
+                                                    <span
+                                                        title={`Deadline: ${deadlineTask.text}`}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 3,
+                                                            fontSize: 9,
+                                                            fontWeight: 700,
+                                                            padding: '2px 7px',
+                                                            borderRadius: 20,
+                                                            background: '#FBBF2418',
+                                                            color: '#FBBF24',
+                                                            border: '1px solid #FBBF2450',
+                                                        }}
+                                                    >
+                                                        <Clock size={10} strokeWidth={2.6} /> Deadline
+                                                    </span>
+                                                )}
                                                 <span
                                                     style={{
                                                         display: 'inline-flex',
@@ -1200,6 +1325,38 @@ function StudyWeek({
                                 );
                             })}
                         </div>
+
+                        {dayShifts.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                                {dayShifts.map((s) => {
+                                    const conflict = classTimeRanges.some(([cs, ce]) => timeRangesOverlap(s.start, s.end, cs, ce));
+                                    return (
+                                        <div
+                                            key={s.key}
+                                            title={conflict ? 'Trùng giờ với lịch học!' : undefined}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 6,
+                                                borderRadius: 9,
+                                                padding: '7px 11px',
+                                                borderLeft: `3px solid ${conflict ? '#EF4444' : '#8B5CF6'}`,
+                                                background: conflict ? '#EF444414' : '#8B5CF614',
+                                                ...(conflict ? { boxShadow: '0 0 0 2px #EF4444' } : {}),
+                                            }}
+                                        >
+                                            <Briefcase size={12} strokeWidth={2.4} color={conflict ? '#EF4444' : '#8B5CF6'} />
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: conflict ? '#EF4444' : '#8B5CF6' }}>
+                                                Ca làm {s.start}-{s.end}
+                                            </span>
+                                            {conflict && (
+                                                <span style={{ fontSize: 9, fontWeight: 700, color: '#EF4444', marginLeft: 'auto' }}>Trùng giờ!</span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 );
             })}
@@ -1294,11 +1451,22 @@ function ExamWeek({
 }
 
 interface CalendarEventProps {
-    code: string;
-    kind: 'class' | 'exam';
+    code?: string;
+    kind: 'class' | 'exam' | 'shift';
     isOnline?: boolean | null;
     room?: string;
     type?: string;
+}
+
+// Slot của lịch lặp hàng tuần không có giờ riêng (chỉ có mảng mã môn theo thứ tự slot) ->
+// suy giờ từ vị trí trong mảng (slot = index + 1) qua SLOT_TIMES, khớp với cách hiển thị
+// "SLOT n" đã dùng ở StudyWeek. Buổi có ngày cụ thể ưu tiên giờ thật nếu có.
+function resolveClassTimes(startTime: string | null | undefined, endTime: string | null | undefined, slotOrder: number): [string, string] {
+    if (startTime && endTime) return [startTime.slice(0, 5), endTime.slice(0, 5)];
+    return SLOT_TIMES[slotOrder] || SLOT_TIMES[1];
+}
+function timeRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+    return aStart < bEnd && bStart < aEnd;
 }
 
 function CalendarView({
@@ -1308,6 +1476,9 @@ function CalendarView({
     scheduleByDate,
     onlineDays,
     examData,
+    tasks,
+    workShiftTypes,
+    workShifts,
     openModal,
 }: {
     semStart: string;
@@ -1316,11 +1487,15 @@ function CalendarView({
     scheduleByDate: ScheduleByDate;
     onlineDays: OnlineDays;
     examData: ExamData;
+    tasks: Task[];
+    workShiftTypes: WorkShiftTypeItem[];
+    workShifts: WorkShiftItem[];
     openModal: (id: string) => void;
 }) {
     // FullCalendar cần danh sách event tĩnh (không tính theo từng ngày một như bản tự vẽ
     // cũ) — build 1 lần: (1) lịch lặp lại hàng tuần chỉ trong phạm vi STUDY_WEEKS tuần học
-    // đầu tiên của học kỳ, (2) buổi học có ngày cụ thể (import .ics/tạo tay), (3) lịch thi.
+    // đầu tiên của học kỳ, (2) buổi học có ngày cụ thể (import .ics/tạo tay), (3) lịch thi,
+    // (4) ca làm, đối chiếu giờ với (1)+(2) để cảnh báo trùng giờ.
     const events = useMemo(() => {
         const list: {
             id: string;
@@ -1330,8 +1505,18 @@ function CalendarView({
             allDay?: boolean;
             backgroundColor: string;
             borderColor: string;
+            classNames?: string[];
             extendedProps: CalendarEventProps;
         }[] = [];
+
+        // Task có deadline đúng ngày + đúng môn -> đánh dấu nổi bật sự kiện đó lên (viền
+        // vàng + icon đồng hồ) để không bị trôi mất giữa các sự kiện khác trong ngày.
+        const hasDeadline = (code: string, dateStr: string) =>
+            tasks.some((t) => !t.done && t.subject === code && t.deadline && t.deadline.slice(0, 10) === dateStr);
+
+        // Theo dõi giờ học thật của từng sự kiện lớp đã đẩy vào list (theo idx) để sau đó
+        // đối chiếu với ca làm cùng ngày — phát hiện trùng giờ thì tô đỏ cảnh báo cả 2 bên.
+        const classTimesByDate: Record<string, { idx: number; start: string; end: string }[]> = {};
 
         const semStartMonday = parseLocalDate(semStart);
         for (let week = 0; week < STUDY_WEEKS; week++) {
@@ -1344,15 +1529,20 @@ function CalendarView({
                 (schedule[dow] || []).forEach((code, i) => {
                     const sub = subjectMap[code];
                     if (!sub) return;
+                    const deadline = hasDeadline(code, dateStr);
+                    const [start, end] = resolveClassTimes(null, null, i + 1);
+                    const idx = list.length;
                     list.push({
                         id: `tpl-${week}-${dow}-${i}`,
-                        title: dayOnline ? `${sub.name} · 🌐 Online` : sub.name,
+                        title: `${deadline ? '⏰ ' : ''}${sub.name}${dayOnline ? ' · 🌐 Online' : ''}`,
                         start: dateStr,
                         allDay: true,
                         backgroundColor: hexToRgba(sub.color, 0.16),
                         borderColor: sub.color,
+                        classNames: deadline ? ['fc-event-has-deadline'] : undefined,
                         extendedProps: { code, kind: 'class', isOnline: dayOnline },
                     });
+                    (classTimesByDate[dateStr] ||= []).push({ idx, start, end });
                 });
             }
         }
@@ -1361,16 +1551,21 @@ function CalendarView({
             items.forEach((item, i) => {
                 const sub = subjectMap[item.code];
                 if (!sub) return;
+                const deadline = hasDeadline(item.code, dateStr);
+                const [start, end] = resolveClassTimes(item.startTime, item.endTime, item.slotOrder);
+                const idx = list.length;
                 list.push({
                     id: `dated-${dateStr}-${i}`,
-                    title: item.isOnline ? `${sub.name} · 🌐 Online` : sub.name,
+                    title: `${deadline ? '⏰ ' : ''}${sub.name}${item.isOnline ? ' · 🌐 Online' : ''}`,
                     start: item.startTime ? `${dateStr}T${item.startTime}` : dateStr,
                     end: item.endTime ? `${dateStr}T${item.endTime}` : undefined,
                     allDay: !item.startTime,
                     backgroundColor: hexToRgba(sub.color, 0.16),
                     borderColor: sub.color,
+                    classNames: deadline ? ['fc-event-has-deadline'] : undefined,
                     extendedProps: { code: item.code, kind: 'class', isOnline: item.isOnline },
                 });
+                (classTimesByDate[dateStr] ||= []).push({ idx, start, end });
             });
         });
 
@@ -1391,25 +1586,135 @@ function CalendarView({
             });
         });
 
+        const pushShift = (id: string, date: string, start: string, end: string) => {
+            const conflicts = (classTimesByDate[date] || []).filter((c) => timeRangesOverlap(start, end, c.start, c.end));
+            if (conflicts.length > 0) {
+                conflicts.forEach((c) => {
+                    const existing = list[c.idx].classNames || [];
+                    if (!existing.includes('fc-event-has-conflict')) list[c.idx].classNames = [...existing, 'fc-event-has-conflict'];
+                });
+            }
+            list.push({
+                id,
+                title: `💼 Ca làm ${start}-${end}`,
+                start: `${date}T${start}`,
+                end: `${date}T${end}`,
+                allDay: false,
+                backgroundColor: hexToRgba('#8B5CF6', 0.16),
+                borderColor: '#8B5CF6',
+                classNames: conflicts.length > 0 ? ['fc-event-has-conflict'] : undefined,
+                extendedProps: { kind: 'shift' },
+            });
+        };
+
+        workShifts.forEach((shift) => pushShift(`shift-${shift.id}`, shift.date, shift.start, shift.end));
+
+        // Ca làm cố định có chọn thứ trong tuần -> tự động áp lên đúng những ngày đó, trải
+        // suốt STUDY_WEEKS tuần học đầu tiên của học kỳ (giống cách lịch học lặp lại).
+        workShiftTypes.forEach((type) => {
+            type.daysOfWeek.forEach((dow) => {
+                for (let week = 0; week < STUDY_WEEKS; week++) {
+                    const date = new Date(semStartMonday);
+                    date.setDate(date.getDate() + week * 7 + (dow - 1));
+                    const dateStr = toISODate(date);
+                    pushShift(`shift-tpl-${type.id}-${week}-${dow}`, dateStr, type.start, type.end);
+                }
+            });
+        });
+
         return list;
-    }, [semStart, schedule, scheduleByDate, onlineDays, examData, subjectMap]);
+    }, [semStart, schedule, scheduleByDate, onlineDays, examData, subjectMap, tasks, workShiftTypes, workShifts]);
+
+    // FullCalendar tự vẽ popover "+n more" bằng cách định vị lại các sự kiện theo giả định
+    // mỗi sự kiện cao 1 dòng — nhưng CSS ở đây bắt tiêu đề xuống dòng nên popover mặc định
+    // bị chồng chữ lên nhau (không sửa được bằng CSS một cách đáng tin cậy). Thay vào đó tự
+    // vẽ danh sách "xem đầy đủ" bằng ModalShell sẵn có — không đụng gì tới layout nội bộ
+    // của FullCalendar nên không thể bị lỗi tương tự nữa.
+    const [overflowDate, setOverflowDate] = useState<string | null>(null);
+
+    const openEvent = (props: CalendarEventProps, dateStr: string) => {
+        if (props.kind === 'shift' || !props.code) {
+            openModal(`day:${dateStr}`);
+            return;
+        }
+        openModal(`note:${props.code}`);
+    };
+
+    const overflowEvents = overflowDate ? events.filter((e) => e.start.slice(0, 10) === overflowDate) : [];
 
     return (
         <div className="fc-home-wrap">
             <FullCalendar
-                plugins={[dayGridPlugin, interactionPlugin]}
+                plugins={CALENDAR_PLUGINS}
                 initialView="dayGridMonth"
                 locale={viLocale}
-                headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+                headerToolbar={CALENDAR_HEADER_TOOLBAR}
                 height="auto"
                 dayMaxEvents={3}
                 events={events}
-                eventClick={(info) => {
-                    const code = (info.event.extendedProps as CalendarEventProps).code;
-                    openModal(`note:${code}`);
-                }}
+                eventClick={(info) => openEvent(info.event.extendedProps as CalendarEventProps, info.event.startStr.slice(0, 10))}
                 dateClick={(info) => openModal(`day:${info.dateStr}`)}
+                moreLinkClick={(info) => {
+                    setOverflowDate(toISODate(info.date));
+                    // FullCalendar không có API "return false để huỷ" thật sự — theo source
+                    // (MoreLinkContainer), chỉ giá trị falsy hoặc 'popover' mới mở popover
+                    // mặc định; chuỗi khác được coi là tên view rồi gọi zoomTo(). Trả về 1
+                    // tên view không tồn tại để nó chỉ set lại đúng ngày đang xem (vô hại,
+                    // không đổi view) thay vì mở popover lỗi.
+                    return 'none';
+                }}
+                eventDidMount={(info) => {
+                    if (info.event.classNames.includes('fc-event-has-conflict')) {
+                        info.el.title = 'Trùng giờ với ca làm!';
+                    } else if (info.event.classNames.includes('fc-event-has-deadline')) {
+                        info.el.title = 'Có deadline';
+                    }
+                }}
             />
+            {overflowDate && (
+                <ModalShell
+                    title={
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, textTransform: 'capitalize' }}>
+                            <CalendarDays size={16} strokeWidth={2.4} />
+                            {parseLocalDate(overflowDate).toLocaleDateString('vi-VN', {
+                                weekday: 'long',
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                            })}
+                        </span>
+                    }
+                    onClose={() => setOverflowDate(null)}
+                >
+                    {overflowEvents.map((e) => (
+                        <button
+                            key={e.id}
+                            onClick={() => {
+                                openEvent(e.extendedProps, overflowDate);
+                                setOverflowDate(null);
+                            }}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                background: 'var(--home-input)',
+                                border: '1px solid var(--home-border)',
+                                borderLeft: `3px solid ${e.borderColor}`,
+                                borderRadius: 8,
+                                padding: '9px 11px',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                            }}
+                        >
+                            {e.classNames?.includes('fc-event-has-conflict') && <Briefcase size={13} strokeWidth={2.4} color="#EF4444" />}
+                            {e.classNames?.includes('fc-event-has-deadline') && !e.classNames?.includes('fc-event-has-conflict') && (
+                                <Clock size={13} strokeWidth={2.4} color="#FBBF24" />
+                            )}
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--home-text)' }}>{e.title}</span>
+                        </button>
+                    ))}
+                </ModalShell>
+            )}
         </div>
     );
 }
@@ -1857,6 +2162,7 @@ function SettingsTab({
                 {[
                     { icon: BookOpen, label: 'Quản lý môn học', sub: 'Thêm, sửa, xóa, đổi màu môn', id: 'subjects' },
                     { icon: CalendarDays, label: 'Lịch học theo ngày', sub: 'Chỉnh slot môn cho từng thứ', id: 'schedule' },
+                    { icon: Briefcase, label: 'Ca làm cố định', sub: 'Quản lý ca làm, thêm ca theo ngày', id: 'workshifts' },
                     { icon: MessageCircle, label: 'Gửi phản hồi', sub: 'Góp ý, báo lỗi cho ứng dụng', id: 'feedback' },
                 ].map((item) => (
                     <button
@@ -2495,6 +2801,292 @@ function SubjectsModal({
     );
 }
 
+function WorkShiftTypesModal({
+    workShiftTypes,
+    workShifts,
+    semesterId,
+    onClose,
+    showToast,
+}: {
+    workShiftTypes: WorkShiftTypeItem[];
+    workShifts: WorkShiftItem[];
+    semesterId: number;
+    onClose: () => void;
+    showToast: (msg: string) => void;
+}) {
+    const [local, setLocal] = useState<{ name: string; start: string; end: string; daysOfWeek: number[] }[]>(
+        workShiftTypes.map((t) => ({ name: t.name, start: t.start, end: t.end, daysOfWeek: t.daysOfWeek })),
+    );
+    const [newName, setNewName] = useState('');
+    const [newStart, setNewStart] = useState('08:00');
+    const [newEnd, setNewEnd] = useState('17:00');
+    const [newDays, setNewDays] = useState<number[]>([]);
+    const [saving, setSaving] = useState(false);
+
+    const [quickDate, setQuickDate] = useState<string>(toISODate(new Date()));
+    const [quickTypeIdx, setQuickTypeIdx] = useState<number>(0);
+    const [addingShift, setAddingShift] = useState(false);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+
+    const updateField = (idx: number, field: 'name' | 'start' | 'end', val: string) =>
+        setLocal((prev) => prev.map((t, i) => (i === idx ? { ...t, [field]: val } : t)));
+    const toggleDay = (idx: number, day: number) =>
+        setLocal((prev) =>
+            prev.map((t, i) =>
+                i === idx ? { ...t, daysOfWeek: t.daysOfWeek.includes(day) ? t.daysOfWeek.filter((d) => d !== day) : [...t.daysOfWeek, day] } : t,
+            ),
+        );
+    const toggleNewDay = (day: number) => setNewDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+    const remove = (idx: number) => setLocal((prev) => prev.filter((_, i) => i !== idx));
+    const addType = () => {
+        if (!newName.trim()) return;
+        setLocal((prev) => [...prev, { name: newName.trim(), start: newStart, end: newEnd, daysOfWeek: newDays }]);
+        setNewName('');
+        setNewDays([]);
+    };
+
+    const dayChips = (selected: number[], onToggle: (day: number) => void) => (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {Object.entries(ALL_DAY_NAMES).map(([d, label]) => {
+                const day = Number(d);
+                const active = selected.includes(day);
+                return (
+                    <button
+                        key={day}
+                        type="button"
+                        onClick={() => onToggle(day)}
+                        style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '4px 8px',
+                            borderRadius: 20,
+                            cursor: 'pointer',
+                            background: active ? '#8B5CF6' : 'transparent',
+                            color: active ? '#fff' : 'var(--home-text-dim)',
+                            border: `1px solid ${active ? 'transparent' : 'var(--home-border-strong)'}`,
+                        }}
+                    >
+                        {label.replace('Thứ ', 'T')}
+                    </button>
+                );
+            })}
+        </div>
+    );
+
+    const saveTypes = () => {
+        for (const t of local) {
+            if (!t.name.trim()) {
+                showToast('⚠️ Tên ca làm không được để trống');
+                return;
+            }
+        }
+        setSaving(true);
+        router.put(
+            `/semesters/${semesterId}/work-shift-types`,
+            asFormData({
+                types: local.map((t) => ({ name: t.name, start_time: t.start, end_time: t.end, days_of_week: t.daysOfWeek })),
+            }),
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => showToast('✅ Đã lưu ca làm cố định!'),
+                onError: () => showToast('❌ Không thể lưu ca làm cố định'),
+                onFinish: () => setSaving(false),
+            },
+        );
+    };
+
+    const addShiftFromType = () => {
+        const type = workShiftTypes[quickTypeIdx];
+        if (!type || !quickDate) return;
+        setAddingShift(true);
+        router.post(
+            `/semesters/${semesterId}/work-shifts`,
+            asFormData({ date: quickDate, work_shift_type_id: type.id }),
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => showToast('✅ Đã thêm ca làm!'),
+                onError: () => showToast('❌ Không thể thêm ca làm'),
+                onFinish: () => setAddingShift(false),
+            },
+        );
+    };
+
+    const deleteShift = (id: number) => {
+        setDeletingId(id);
+        router.delete(`/semesters/${semesterId}/work-shifts/${id}`, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => showToast('🗑 Đã xoá ca làm'),
+            onFinish: () => setDeletingId(null),
+        });
+    };
+
+    const sortedShifts = [...workShifts].sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+
+    return (
+        <ModalShell
+            title={
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <Briefcase size={16} strokeWidth={2.4} /> Ca Làm Cố Định
+                </span>
+            }
+            onClose={onClose}
+            footer={
+                <>
+                    <button style={{ ...css.chip, flex: 1, padding: '10px', justifyContent: 'center' }} onClick={onClose}>
+                        Hủy
+                    </button>
+                    <button
+                        style={{ ...css.primaryBtn, flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={saveTypes}
+                        disabled={saving}
+                    >
+                        <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu'}
+                    </button>
+                </>
+            }
+        >
+            <div style={{ fontSize: 11, color: 'var(--home-text-faint)' }}>
+                Định nghĩa các ca làm hay dùng (tên + giờ bắt đầu/kết thúc) để chọn nhanh khi thêm ca làm theo ngày.
+            </div>
+
+            {local.map((t, i) => (
+                <div key={i} style={{ background: 'var(--home-input)', borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginBottom: 6 }}>
+                        <input
+                            value={t.name}
+                            onChange={(e) => updateField(i, 'name', e.target.value)}
+                            placeholder="Tên ca (vd: Ca sáng)"
+                            style={{ ...css.input, flex: 1, fontWeight: 700, fontSize: 13 }}
+                        />
+                        <button
+                            onClick={() => remove(i)}
+                            style={{
+                                display: 'flex',
+                                background: '#EF444418',
+                                border: '1px solid #EF444430',
+                                color: '#EF4444',
+                                borderRadius: 8,
+                                padding: '6px 9px',
+                                cursor: 'pointer',
+                                fontSize: 12,
+                            }}
+                        >
+                            <Trash2 size={14} strokeWidth={2.2} />
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                        <input type="time" value={t.start} onChange={(e) => updateField(i, 'start', e.target.value)} style={{ ...css.input, flex: 1 }} />
+                        <input type="time" value={t.end} onChange={(e) => updateField(i, 'end', e.target.value)} style={{ ...css.input, flex: 1 }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--home-text-faint)', marginBottom: 4 }}>Lặp lại vào các thứ (tự động lên lịch)</div>
+                    {dayChips(t.daysOfWeek, (day) => toggleDay(i, day))}
+                </div>
+            ))}
+
+            <div style={{ background: 'var(--home-card)', border: '1px dashed var(--home-border-strong)', borderRadius: 10, padding: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--home-text-dim)', fontWeight: 600, marginBottom: 8 }}>
+                    <Plus size={13} strokeWidth={2.4} /> Thêm ca làm cố định mới
+                </div>
+                <input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Tên ca (vd: Ca sáng)"
+                    style={{ ...css.input, marginBottom: 6 }}
+                    onKeyDown={(e) => e.key === 'Enter' && addType()}
+                />
+                <div style={{ display: 'flex', gap: 7, marginBottom: 8 }}>
+                    <input type="time" value={newStart} onChange={(e) => setNewStart(e.target.value)} style={{ ...css.input, flex: 1 }} />
+                    <input type="time" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} style={{ ...css.input, flex: 1 }} />
+                    <button style={css.primaryBtn} onClick={addType}>
+                        +
+                    </button>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--home-text-faint)', marginBottom: 4 }}>Lặp lại vào các thứ (tự động lên lịch)</div>
+                {dayChips(newDays, toggleNewDay)}
+            </div>
+
+            {workShiftTypes.length > 0 && (
+                <div
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                        borderTop: '1px solid var(--home-border)',
+                        paddingTop: 10,
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: 'var(--home-text-dim)' }}>
+                        <CalendarPlus size={13} strokeWidth={2.4} /> Thêm ca làm theo ngày
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        <input type="date" value={quickDate} onChange={(e) => setQuickDate(e.target.value)} style={{ ...css.input, flex: 1 }} />
+                        <select
+                            value={quickTypeIdx}
+                            onChange={(e) => setQuickTypeIdx(Number(e.target.value))}
+                            style={{ ...css.select, flex: 1 }}
+                        >
+                            {workShiftTypes.map((t, i) => (
+                                <option key={t.id} value={i}>
+                                    {t.name} ({t.start}-{t.end})
+                                </option>
+                            ))}
+                        </select>
+                        <button
+                            style={{ ...css.smallBtn, opacity: addingShift ? 0.6 : 1 }}
+                            onClick={addShiftFromType}
+                            disabled={addingShift}
+                        >
+                            <Plus size={13} strokeWidth={2.4} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {sortedShifts.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--home-text-dim)' }}>Đã thêm ({sortedShifts.length})</div>
+                    {sortedShifts.map((s) => (
+                        <div
+                            key={s.id}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                background: 'var(--home-input)',
+                                border: '1px solid var(--home-border)',
+                                borderRadius: 8,
+                                padding: '7px 10px',
+                            }}
+                        >
+                            <span style={{ flex: 1, fontSize: 12, color: 'var(--home-text)' }}>
+                                {fmtDMY(parseLocalDate(s.date))} · {s.start}-{s.end}
+                            </span>
+                            <button
+                                title="Xoá ca làm"
+                                style={{
+                                    display: 'flex',
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'var(--home-text-faint)',
+                                    cursor: 'pointer',
+                                    opacity: deletingId === s.id ? 0.5 : 1,
+                                }}
+                                onClick={() => deleteShift(s.id)}
+                                disabled={deletingId === s.id}
+                            >
+                                <Trash2 size={13} strokeWidth={2.2} />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </ModalShell>
+    );
+}
+
 function ScheduleModal({
     subjects,
     scheduleSlotsBySubject,
@@ -2768,6 +3360,8 @@ function ScheduleModal({
 function DayActionsModal({
     dateStr,
     subjects,
+    schedule,
+    scheduleByDate,
     scheduleSlotsBySubject,
     dayNotes,
     semesterId,
@@ -2776,6 +3370,8 @@ function DayActionsModal({
 }: {
     dateStr: string;
     subjects: Subject[];
+    schedule: Schedule;
+    scheduleByDate: ScheduleByDate;
     scheduleSlotsBySubject: ScheduleSlotsBySubject;
     dayNotes: DayNotes;
     semesterId?: number;
@@ -2783,11 +3379,24 @@ function DayActionsModal({
     showToast: (msg: string) => void;
 }) {
     const existingNote = dayNotes[dateStr] || '';
-    const [step, setStep] = useState<'choose' | 'note' | 'slot'>(existingNote ? 'note' : 'choose');
+    const [step, setStep] = useState<'choose' | 'note' | 'slot' | 'task' | 'shift'>(existingNote ? 'note' : 'choose');
     const [noteText, setNoteText] = useState<string>(existingNote);
     const [slotSubject, setSlotSubject] = useState<string>(subjects[0]?.id || '');
+    // Môn mặc định cho "Thêm task" = môn đầu tiên có lịch học đúng ngày này (khớp thứ tự
+    // hiển thị trong StudyWeek: lặp hàng tuần trước, buổi ngày cụ thể sau), fallback về
+    // môn đầu tiên trong danh sách nếu ngày đó không có lịch học nào.
+    const dayItemCodes = [
+        ...(schedule[parseLocalDate(dateStr).getDay()] || []),
+        ...(scheduleByDate[dateStr] || []).map((i) => i.code),
+    ];
+    const defaultTaskSubject = dayItemCodes[0] || subjects[0]?.id || '';
     const [slotNumber, setSlotNumber] = useState<number>(1);
     const [slotOnline, setSlotOnline] = useState<boolean>(false);
+    const [taskSubject, setTaskSubject] = useState<string>(defaultTaskSubject);
+    const [taskText, setTaskText] = useState<string>('');
+    const [taskDeadline, setTaskDeadline] = useState<string>(`${dateStr}T23:59`);
+    const [shiftStart, setShiftStart] = useState<string>('08:00');
+    const [shiftEnd, setShiftEnd] = useState<string>('17:00');
     const [saving, setSaving] = useState(false);
 
     const dateLabel = parseLocalDate(dateStr).toLocaleDateString('vi-VN', {
@@ -2832,6 +3441,51 @@ function DayActionsModal({
             },
             onFinish: () => setSaving(false),
         });
+    };
+
+    const saveTask = () => {
+        if (!taskText.trim()) {
+            showToast('⚠️ Nội dung task không được để trống');
+            return;
+        }
+        setSaving(true);
+        router.post(
+            '/tasks',
+            { subject: taskSubject, text: taskText.trim(), deadline: taskDeadline || null },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    showToast('✅ Đã thêm task!');
+                    onClose();
+                },
+                onError: () => showToast('❌ Không thể thêm task'),
+                onFinish: () => setSaving(false),
+            },
+        );
+    };
+
+    const saveShift = () => {
+        if (!semesterId) return;
+        if (!shiftStart || !shiftEnd) {
+            showToast('⚠️ Vui lòng nhập đủ giờ bắt đầu và kết thúc');
+            return;
+        }
+        setSaving(true);
+        router.post(
+            `/semesters/${semesterId}/work-shifts`,
+            asFormData({ date: dateStr, start_time: shiftStart, end_time: shiftEnd }),
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    showToast('✅ Đã thêm ca làm!');
+                    onClose();
+                },
+                onError: () => showToast('❌ Không thể thêm ca làm'),
+                onFinish: () => setSaving(false),
+            },
+        );
     };
 
     const saveSlot = () => {
@@ -2881,6 +3535,22 @@ function DayActionsModal({
                         disabled={saving || !slotSubject}
                     >
                         <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu slot'}
+                    </button>
+                ) : step === 'task' ? (
+                    <button
+                        style={{ ...css.primaryBtn, flex: 1, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={saveTask}
+                        disabled={saving}
+                    >
+                        <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu task'}
+                    </button>
+                ) : step === 'shift' ? (
+                    <button
+                        style={{ ...css.primaryBtn, flex: 1, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={saveShift}
+                        disabled={saving}
+                    >
+                        <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu ca làm'}
                     </button>
                 ) : step === 'note' ? (
                     <>
@@ -2957,6 +3627,46 @@ function DayActionsModal({
                             <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 1 }}>Xếp một môn vào ngày này</div>
                         </div>
                     </button>
+                    <button
+                        onClick={() => setStep('task')}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            background: 'var(--home-input)',
+                            border: '1px solid var(--home-border)',
+                            borderRadius: 10,
+                            padding: '14px 16px',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                        }}
+                    >
+                        <CheckSquare size={20} strokeWidth={2} color="#FF6B35" />
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--home-text)' }}>Thêm task</div>
+                            <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 1 }}>Tạo nhiệm vụ với deadline ngày này</div>
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setStep('shift')}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            background: 'var(--home-input)',
+                            border: '1px solid var(--home-border)',
+                            borderRadius: 10,
+                            padding: '14px 16px',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                        }}
+                    >
+                        <Briefcase size={20} strokeWidth={2} color="#FF6B35" />
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--home-text)' }}>Thêm ca làm</div>
+                            <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 1 }}>Nhập giờ bắt đầu, giờ kết thúc</div>
+                        </div>
+                    </button>
                 </>
             )}
 
@@ -2995,6 +3705,47 @@ function DayActionsModal({
                         <input type="checkbox" checked={slotOnline} onChange={(e) => setSlotOnline(e.target.checked)} />
                         <Globe size={13} strokeWidth={2.4} /> Học online
                     </label>
+                </>
+            )}
+
+            {step === 'task' && (
+                <>
+                    {backBtn}
+                    <SubjectCombobox subjects={subjects} value={taskSubject} onChange={setTaskSubject} />
+                    <input
+                        value={taskText}
+                        onChange={(e) => setTaskText(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && saveTask()}
+                        placeholder="Mô tả nhiệm vụ..."
+                        style={css.input}
+                    />
+                    <input type="datetime-local" value={taskDeadline} onChange={(e) => setTaskDeadline(e.target.value)} style={css.input} />
+                </>
+            )}
+
+            {step === 'shift' && (
+                <>
+                    {backBtn}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <label style={{ flex: 1, fontSize: 11, color: 'var(--home-text-dim)' }}>
+                            Giờ bắt đầu
+                            <input
+                                type="time"
+                                value={shiftStart}
+                                onChange={(e) => setShiftStart(e.target.value)}
+                                style={{ ...css.input, marginTop: 4 }}
+                            />
+                        </label>
+                        <label style={{ flex: 1, fontSize: 11, color: 'var(--home-text-dim)' }}>
+                            Giờ kết thúc
+                            <input
+                                type="time"
+                                value={shiftEnd}
+                                onChange={(e) => setShiftEnd(e.target.value)}
+                                style={{ ...css.input, marginTop: 4 }}
+                            />
+                        </label>
+                    </div>
                 </>
             )}
         </ModalShell>
@@ -3219,12 +3970,13 @@ const globalCss = `
     }
     .fc-event:hover { transform: translateY(-1px); box-shadow: 0 4px 10px var(--home-shadow); }
     .fc-event-title, .fc-event-time { color: var(--home-text); white-space: normal !important; overflow: visible !important; text-overflow: clip !important; font-weight: 600; }
+    .fc-event-has-deadline { box-shadow: 0 0 0 2px #FBBF2490 !important; }
+    .fc-event-has-deadline:hover { box-shadow: 0 0 0 2px #FBBF24, 0 4px 10px var(--home-shadow) !important; }
+    .fc-event-has-conflict { box-shadow: 0 0 0 2px #EF4444 !important; }
+    .fc-event-has-conflict:hover { box-shadow: 0 0 0 2px #EF4444, 0 4px 10px var(--home-shadow) !important; }
     .fc-daygrid-event { white-space: normal !important; align-items: flex-start !important; }
     .fc-daygrid-event-harness { margin-bottom: 3px !important; }
     .fc-daygrid-more-link { color: #FF6B35; font-size: 10px; font-weight: 700; }
-    .fc-popover { background: var(--home-card); border: 1px solid var(--home-border-strong); border-radius: 14px; box-shadow: 0 10px 36px var(--home-shadow); overflow: hidden; }
-    .fc-popover-header { background: var(--home-input); color: var(--home-text); font-weight: 700; padding: 8px 10px; }
-    .fc-popover-close { color: var(--home-text-faint); }
     @media (max-width: 640px) {
         .fc-home-wrap { padding: 10px; border-radius: 14px; }
         .fc .fc-toolbar-title { font-size: 15px; }

@@ -33,12 +33,17 @@ class HomeController extends Controller
                 'examData' => (object) [],
                 'examWeeksCount' => 2,
                 'feedback' => [],
+                'workShiftTypes' => [],
+                'workShifts' => [],
                 'isDemo' => true,
             ]);
         }
 
         $semester = $this->currentSemesterFor($user);
-        $semester->load(['subjects.scheduleSlots', 'subjects.examEntries', 'subjects.note', 'onlineDays', 'tasks', 'dayNotes']);
+        $semester->load([
+            'subjects.scheduleSlots', 'subjects.examEntries', 'subjects.note', 'onlineDays', 'tasks', 'dayNotes',
+            'workShiftTypes', 'workShifts',
+        ]);
 
         $subjects = $semester->subjects->map(fn ($s) => [
             'id' => $s->code,
@@ -181,6 +186,24 @@ class HomeController extends Controller
                 'createdAt' => $f->created_at->toIso8601String(),
             ]);
 
+        $workShiftTypes = $semester->workShiftTypes->map(fn ($t) => [
+            'id' => $t->id,
+            'name' => $t->name,
+            'start' => substr($t->start_time, 0, 5),
+            'end' => substr($t->end_time, 0, 5),
+            'daysOfWeek' => $t->days_of_week ?? [],
+        ])->values();
+
+        $workShifts = $semester->workShifts
+            ->sortBy(fn ($s) => $s->date->toDateString().' '.$s->start_time)
+            ->values()
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'date' => $s->date->toDateString(),
+                'start' => substr($s->start_time, 0, 5),
+                'end' => substr($s->end_time, 0, 5),
+            ]);
+
         return Inertia::render('home/home', [
             'semesterId' => $semester->id,
             'semStart' => $semester->start_date->toDateString(),
@@ -196,6 +219,8 @@ class HomeController extends Controller
             'examData' => (object) $examData,
             'examWeeksCount' => $examWeeksCount,
             'feedback' => $feedback,
+            'workShiftTypes' => $workShiftTypes,
+            'workShifts' => $workShifts,
             'isDemo' => false,
         ]);
     }
