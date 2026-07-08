@@ -2,7 +2,8 @@
 
 import type { FormDataConvertible } from '@inertiajs/core';
 import { Link, router, usePage } from '@inertiajs/react';
-import React, { CSSProperties, useEffect, useMemo, useState } from 'react';
+import React, { CSSProperties, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useAppearance } from '@/hooks/use-appearance';
 
 // Inertia's router.put/post yêu cầu payload thoả FormDataConvertible (index signature).
 // Các type của app (Subject[], Schedule, OnlineDays, ExamData) đã có shape cụ thể nên
@@ -205,6 +206,20 @@ export default function Home() {
     const [showPushBanner, setShowPushBanner] = useState<boolean>(false);
     const [subscribing, setSubscribing] = useState<boolean>(false);
 
+    // Tái sử dụng hệ theme có sẵn của app (localStorage['appearance'], class .dark trên
+    // <html>, đã được initializeTheme() áp dụng đúng trước khi React mount) thay vì tự
+    // dựng cơ chế theme riêng cho mỗi trang.
+    const { updateAppearance } = useAppearance();
+    const [isDark, setIsDark] = useState(true);
+    useLayoutEffect(() => {
+        setIsDark(document.documentElement.classList.contains('dark'));
+    }, []);
+    const toggleTheme = () => {
+        const next = isDark ? 'light' : 'dark';
+        updateAppearance(next);
+        setIsDark(!isDark);
+    };
+
     const currentWeek = useMemo(() => {
         const start = parseLocalDate(semStart);
         start.setHours(0, 0, 0, 0);
@@ -333,6 +348,8 @@ export default function Home() {
                 pendingTasks={pendingTasks}
                 user={user}
                 isDemo={isDemo}
+                isDark={isDark}
+                toggleTheme={toggleTheme}
             />
 
             <BottomNav tab={tab} setTab={setTab} pendingCount={pendingTasks.length} />
@@ -463,9 +480,11 @@ interface HeaderProps {
     pendingTasks: Task[];
     user: { id: number; name: string; email: string } | null;
     isDemo: boolean;
+    isDark: boolean;
+    toggleTheme: () => void;
 }
 
-function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pendingTasks, user }: HeaderProps) {
+function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pendingTasks, user, isDark, toggleTheme }: HeaderProps) {
     const isExam = currentWeek > STUDY_WEEKS;
     const label = isExam ? `THI ${currentWeek - STUDY_WEEKS}` : `W${currentWeek}`;
     const sublabel = isExam ? 'TUẦN THI' : 'TUẦN HỌC';
@@ -477,7 +496,7 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                     <span style={{ fontSize: 22, fontWeight: 900, color: '#FF6B35', letterSpacing: -1 }}>FPT</span>
                     <span style={{ fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: -1 }}>TIME</span>
                 </div>
-                <div style={{ fontSize: 9, color: '#444', letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 1 }}>Management Toolkit</div>
+                <div style={{ fontSize: 9, color: 'var(--home-text-faint)', letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 1 }}>Management Toolkit</div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -505,13 +524,17 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                     </Link>
                 )}
 
+                <button style={css.iconBtn} title={isDark ? 'Giao diện sáng' : 'Giao diện tối'} onClick={toggleTheme}>
+                    {isDark ? '☀️' : '🌙'}
+                </button>
+
                 <div style={{ position: 'relative' }}>
                     <button
                         className={bellAnim ? 'anim-bell' : ''}
                         style={{
                             ...css.iconBtn,
-                            color: urgentCount > 0 ? '#FBBF24' : '#888',
-                            border: `1px solid ${urgentCount > 0 ? '#FBBF2430' : '#ffffff12'}`,
+                            color: urgentCount > 0 ? '#FBBF24' : 'var(--home-text-dim)',
+                            border: `1px solid ${urgentCount > 0 ? '#FBBF2430' : 'var(--home-border-strong)'}`,
                         }}
                         onClick={() => setBellOpen((o) => !o)}
                     >
@@ -548,7 +571,7 @@ function BellPanel({ tasks, onClose }: { tasks: Task[]; onClose: () => void }) {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '10px 14px',
-                    borderBottom: '1px solid #ffffff0f',
+                    borderBottom: '1px solid var(--home-border)',
                 }}
             >
                 <span style={{ fontWeight: 700, fontSize: 13 }}>⏰ Deadline Tasks</span>
@@ -556,17 +579,17 @@ function BellPanel({ tasks, onClose }: { tasks: Task[]; onClose: () => void }) {
                     ✕
                 </button>
             </div>
-            {tasks.length === 0 && <div style={{ padding: '28px 14px', textAlign: 'center', color: '#444', fontSize: 13 }}>Không có task nào 🎉</div>}
+            {tasks.length === 0 && <div style={{ padding: '28px 14px', textAlign: 'center', color: 'var(--home-text-faint)', fontSize: 13 }}>Không có task nào 🎉</div>}
             {withDl.map((t) => {
                 const ms = new Date(t.deadline).getTime() - now.getTime();
                 const over = ms <= 0;
                 const warn = !over && ms < 3600000;
                 const color = over ? '#EF4444' : warn ? '#FBBF24' : '#34D399';
                 return (
-                    <div key={t.id} style={{ padding: '9px 14px', borderBottom: '1px solid #ffffff08' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, color: over ? '#EF4444' : '#e2e2f0' }}>{t.text}</div>
+                    <div key={t.id} style={{ padding: '9px 14px', borderBottom: '1px solid var(--home-border-faint)' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, color: over ? '#EF4444' : 'var(--home-text)' }}>{t.text}</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: 10, color: '#555' }}>{t.subject}</span>
+                            <span style={{ fontSize: 10, color: 'var(--home-text-faint)' }}>{t.subject}</span>
                             <span
                                 style={{
                                     fontSize: 11,
@@ -584,7 +607,7 @@ function BellPanel({ tasks, onClose }: { tasks: Task[]; onClose: () => void }) {
                     </div>
                 );
             })}
-            {noDl.length > 0 && <div style={{ padding: '7px 14px', fontSize: 11, color: '#444' }}>+{noDl.length} task chưa có deadline</div>}
+            {noDl.length > 0 && <div style={{ padding: '7px 14px', fontSize: 11, color: 'var(--home-text-faint)' }}>+{noDl.length} task chưa có deadline</div>}
         </div>
     );
 }
@@ -605,7 +628,7 @@ function BottomNav({ tab, setTab, pendingCount }: { tab: TabId; setTab: React.Di
             {items.map((item) => {
                 const active = tab === item.id;
                 return (
-                    <button key={item.id} style={{ ...css.navBtn, color: active ? '#FF6B35' : '#555' }} onClick={() => setTab(item.id)}>
+                    <button key={item.id} style={{ ...css.navBtn, color: active ? '#FF6B35' : 'var(--home-text-faint)' }} onClick={() => setTab(item.id)}>
                         <span style={{ fontSize: 18 }}>{item.icon}</span>
                         <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>{item.label}</span>
                         {!!item.badge && item.badge > 0 && <span style={css.navBadge}>{item.badge}</span>}
@@ -666,7 +689,7 @@ function ScheduleTab({
                         {isExam ? `🎯 TUẦN THI ${weekView - STUDY_WEEKS}` : `📚 TUẦN ${weekView}`}
                         {weekView === currentWeek && <span style={css.nowTag}>Hiện tại</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 2 }}>
                         {fmtDMY(monday)} – {fmtDMY(getDayDate(monday, 5))}
                     </div>
                 </div>
@@ -683,7 +706,7 @@ function ScheduleTab({
                         ['#00C6FF', '🌐 Online'],
                         ['#FF6B35', '🏫 Offline'],
                     ].map(([c, l]) => (
-                        <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#777' }}>
+                        <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--home-text-dim)' }}>
                             <div style={{ width: 7, height: 7, borderRadius: '50%', background: c }} />
                             {l}
                         </div>
@@ -738,8 +761,8 @@ function WeekPills({
                             fontWeight: 700,
                             cursor: 'pointer',
                             background: isActive ? (isExam ? '#FBBF24' : '#FF6B35') : 'transparent',
-                            color: isActive ? '#fff' : isExam ? '#FBBF24' : isCurrent ? '#FF6B35' : '#555',
-                            border: isActive ? 'none' : isCurrent ? '1px solid #FF6B3560' : isExam ? '1px solid #FBBF2440' : '1px solid #ffffff10',
+                            color: isActive ? '#fff' : isExam ? '#FBBF24' : isCurrent ? '#FF6B35' : 'var(--home-text-faint)',
+                            border: isActive ? 'none' : isCurrent ? '1px solid #FF6B3560' : isExam ? '1px solid #FBBF2440' : '1px solid var(--home-border)',
                         }}
                     >
                         {w > STUDY_WEEKS ? `T${w - STUDY_WEEKS}` : w}
@@ -790,7 +813,7 @@ function StudyWeek({
                     <div key={dow} style={{ ...css.card, ...(today ? { border: '1px solid #FF6B3540', boxShadow: '0 0 20px #FF6B3310' } : {}) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                             <span style={{ fontWeight: 800, fontSize: 13 }}>{DAY_NAMES[dow]}</span>
-                            <span style={{ fontSize: 11, color: '#555', flex: 1 }}>
+                            <span style={{ fontSize: 11, color: 'var(--home-text-faint)', flex: 1 }}>
                                 {fmtDMY(date)}
                                 {today && (
                                     <span className="anim-pulse" style={{ color: '#FF6B35', marginLeft: 6, fontSize: 9 }}>
@@ -799,7 +822,7 @@ function StudyWeek({
                                 )}
                             </span>
                         </div>
-                        {items.length === 0 && <div style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>Không có lịch học</div>}
+                        {items.length === 0 && <div style={{ fontSize: 11, color: 'var(--home-text-faint)', fontStyle: 'italic' }}>Không có lịch học</div>}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                             {items.map((item, i) => {
                                 const sub = subjectMap[item.code];
@@ -832,10 +855,10 @@ function StudyWeek({
                                                 >
                                                     {online ? '🌐 Online' : '🏫 Offline'}
                                                 </span>
-                                                <span style={{ fontSize: 9, color: '#555' }}>SLOT {item.slotOrder ?? i + 1}</span>
+                                                <span style={{ fontSize: 9, color: 'var(--home-text-faint)' }}>SLOT {item.slotOrder ?? i + 1}</span>
                                             </div>
                                         </div>
-                                        <div style={{ fontSize: 11, color: '#888', marginBottom: 7 }}>{sub.full}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--home-text-dim)', marginBottom: 7 }}>{sub.full}</div>
                                         <button style={css.smallBtn} onClick={() => openModal(`note:${item.code}`)}>
                                             {hasNote ? '📝 Xem ghi chú' : '➕ Thêm ghi chú'}
                                         </button>
@@ -880,7 +903,7 @@ function ExamWeek({
                 <span style={{ fontSize: 30 }}>🎯</span>
                 <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 800, fontSize: 15, color: '#FBBF24' }}>TUẦN THI {examWeekNum}</div>
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>Chỉnh sửa theo thông báo chính thức</div>
+                    <div style={{ fontSize: 11, color: 'var(--home-text-dim)', marginTop: 2 }}>Chỉnh sửa theo thông báo chính thức</div>
                 </div>
                 <button style={{ ...css.smallBtn, color: '#FBBF24', borderColor: '#FBBF2440' }} onClick={() => openModal('exam')}>
                     ✏️ Sửa
@@ -894,7 +917,7 @@ function ExamWeek({
                     return (
                         <div key={sub.id} style={{ ...css.card, borderTop: `3px solid ${sub.color}`, gap: 0 }}>
                             <div style={{ color: sub.color, fontWeight: 800, fontSize: 13, marginBottom: 2 }}>{sub.name}</div>
-                            <div style={{ fontSize: 10, color: '#666', marginBottom: 8 }}>{sub.full}</div>
+                            <div style={{ fontSize: 10, color: 'var(--home-text-dim)', marginBottom: 8 }}>{sub.full}</div>
                             {exam ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
                                     {(
@@ -907,13 +930,13 @@ function ExamWeek({
                                     )
                                         .filter(([, v]) => v)
                                         .map(([icon, val]) => (
-                                            <div key={icon} style={{ fontSize: 11, color: '#ccc' }}>
+                                            <div key={icon} style={{ fontSize: 11, color: 'var(--home-text-soft)' }}>
                                                 {icon} {val}
                                             </div>
                                         ))}
                                 </div>
                             ) : (
-                                <div style={{ fontSize: 11, color: '#444', fontStyle: 'italic', marginBottom: 8 }}>Chưa có lịch thi</div>
+                                <div style={{ fontSize: 11, color: 'var(--home-text-faint)', fontStyle: 'italic', marginBottom: 8 }}>Chưa có lịch thi</div>
                             )}
                             <button style={css.smallBtn} onClick={() => openModal(`note:${sub.id}`)}>
                                 {hasNote ? '📝 Ghi chú' : '➕ Ôn thi'}
@@ -1020,7 +1043,7 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
                 ].map((s) => (
                     <div key={s.label} style={{ flex: 1, ...css.card, padding: '10px', textAlign: 'center', gap: 2 }}>
                         <div style={{ fontSize: 22, fontWeight: 900, color: s.color }}>{s.val}</div>
-                        <div style={{ fontSize: 10, color: '#666' }}>{s.label}</div>
+                        <div style={{ fontSize: 10, color: 'var(--home-text-dim)' }}>{s.label}</div>
                     </div>
                 ))}
             </div>
@@ -1028,7 +1051,7 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {['ALL', ...subjects.map((s) => s.id)].map((f) => {
                     const active = f === filter;
-                    const color = f === 'ALL' ? '#fff' : subjectMap[f]?.color || '#888';
+                    const color = f === 'ALL' ? '#fff' : subjectMap[f]?.color || 'var(--home-text-dim)';
                     return (
                         <button
                             key={f}
@@ -1036,8 +1059,8 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
                             style={{
                                 ...css.chip,
                                 background: active ? (f === 'ALL' ? '#fff' : color) : 'transparent',
-                                color: active ? (f === 'ALL' ? '#06061a' : '#fff') : '#666',
-                                border: `1px solid ${active ? 'transparent' : '#ffffff12'}`,
+                                color: active ? (f === 'ALL' ? 'var(--home-bg)' : '#fff') : 'var(--home-text-dim)',
+                                border: `1px solid ${active ? 'transparent' : 'var(--home-border-strong)'}`,
                             }}
                         >
                             {f}
@@ -1047,7 +1070,7 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
             </div>
 
             {pending.length === 0 && done.length === 0 && (
-                <div style={{ textAlign: 'center', color: '#333', padding: '48px 0', fontSize: 14 }}>Không có task nào 🎉</div>
+                <div style={{ textAlign: 'center', color: 'var(--home-text-faint)', padding: '48px 0', fontSize: 14 }}>Không có task nào 🎉</div>
             )}
 
             {pending.map((t) => (
@@ -1056,7 +1079,7 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
 
             {done.length > 0 && (
                 <>
-                    <div style={{ fontSize: 11, color: '#444', fontWeight: 700, padding: '4px 0', borderTop: '1px solid #ffffff0a' }}>
+                    <div style={{ fontSize: 11, color: 'var(--home-text-faint)', fontWeight: 700, padding: '4px 0', borderTop: '1px solid var(--home-border)' }}>
                         ✅ HOÀN THÀNH ({done.length})
                     </div>
                     {done.map((t) => (
@@ -1081,7 +1104,7 @@ function TaskRow({
     onDelete: (id: number) => void;
     overdue: boolean;
 }) {
-    const sub = subjectMap[task.subject] || { color: '#888' };
+    const sub = subjectMap[task.subject] || { color: 'var(--home-text-dim)' };
     return (
         <div
             style={{
@@ -1090,8 +1113,8 @@ function TaskRow({
                 gap: 10,
                 padding: '10px 12px',
                 borderRadius: 10,
-                background: '#0d0d22',
-                border: `1px solid ${overdue && !task.done ? '#EF444430' : '#ffffff0a'}`,
+                background: 'var(--home-card)',
+                border: `1px solid ${overdue && !task.done ? '#EF444430' : 'var(--home-border)'}`,
                 borderLeft: `3px solid ${sub.color}`,
                 opacity: task.done ? 0.5 : 1,
             }}
@@ -1115,7 +1138,7 @@ function TaskRow({
                 <div style={{ display: 'flex', gap: 8, marginTop: 3, flexWrap: 'wrap', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: sub.color }}>{task.subject}</span>
                     {task.deadline && (
-                        <span style={{ fontSize: 10, color: overdue && !task.done ? '#EF4444' : '#555' }}>
+                        <span style={{ fontSize: 10, color: overdue && !task.done ? '#EF4444' : 'var(--home-text-faint)' }}>
                             ⏰{' '}
                             {new Date(task.deadline).toLocaleString('vi-VN', {
                                 day: '2-digit',
@@ -1144,7 +1167,7 @@ function TaskRow({
 function NotesTab({ subjects, notes, openModal }: { subjects: Subject[]; notes: Notes; openModal: (id: string) => void }) {
     return (
         <div style={css.tab} className="anim-fadeup">
-            <div style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>Nhấn vào môn để xem hoặc chỉnh sửa ghi chú</div>
+            <div style={{ fontSize: 12, color: 'var(--home-text-faint)', marginBottom: 2 }}>Nhấn vào môn để xem hoặc chỉnh sửa ghi chú</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {subjects.map((sub) => {
                     const note = notes[sub.id] || '';
@@ -1155,11 +1178,11 @@ function NotesTab({ subjects, notes, openModal }: { subjects: Subject[]; notes: 
                             onClick={() => openModal(`note:${sub.id}`)}
                         >
                             <div style={{ fontWeight: 800, fontSize: 13, color: sub.color }}>{sub.name}</div>
-                            <div style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>{sub.full}</div>
+                            <div style={{ fontSize: 10, color: 'var(--home-text-faint)', marginBottom: 4 }}>{sub.full}</div>
                             <div
                                 style={{
                                     fontSize: 11,
-                                    color: note ? '#bbb' : '#444',
+                                    color: note ? 'var(--home-text-soft)' : 'var(--home-text-faint)',
                                     lineHeight: 1.5,
                                     flex: 1,
                                     fontStyle: note ? 'normal' : 'italic',
@@ -1210,9 +1233,9 @@ function SettingsTab({
         <div style={css.tab} className="anim-fadeup">
             <div style={css.card}>
                 <div style={css.cardTitle}>📅 Ngày Bắt Đầu Học Kỳ</div>
-                <div style={{ fontSize: 11, color: '#555', marginBottom: 6 }}>Chọn ngày Thứ 2 của tuần đầu tiên</div>
+                <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginBottom: 6 }}>Chọn ngày Thứ 2 của tuần đầu tiên</div>
                 <input type="date" value={semStart} onChange={(e) => changeSemStart(e.target.value)} style={css.input} disabled={isDemo} />
-                <div style={{ fontSize: 12, color: '#888' }}>
+                <div style={{ fontSize: 12, color: 'var(--home-text-dim)' }}>
                     Tuần hiện tại:{' '}
                     <strong style={{ color: '#FF6B35' }}>
                         {currentWeek <= STUDY_WEEKS ? `Tuần ${currentWeek}` : `Tuần thi ${currentWeek - STUDY_WEEKS}`}
@@ -1235,8 +1258,8 @@ function SettingsTab({
                             alignItems: 'center',
                             gap: 12,
                             width: '100%',
-                            background: '#1a1a32',
-                            border: '1px solid #ffffff0a',
+                            background: 'var(--home-input)',
+                            border: '1px solid var(--home-border)',
                             borderRadius: 10,
                             padding: '11px 13px',
                             cursor: 'pointer',
@@ -1245,10 +1268,10 @@ function SettingsTab({
                     >
                         <span style={{ fontSize: 22 }}>{item.icon}</span>
                         <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: '#e2e2f0' }}>{item.label}</div>
-                            <div style={{ fontSize: 11, color: '#555', marginTop: 1 }}>{item.sub}</div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--home-text)' }}>{item.label}</div>
+                            <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 1 }}>{item.sub}</div>
                         </div>
-                        <span style={{ color: '#444', fontSize: 18 }}>›</span>
+                        <span style={{ color: 'var(--home-text-faint)', fontSize: 18 }}>›</span>
                     </button>
                 ))}
             </div>
@@ -1268,14 +1291,14 @@ function SettingsTab({
                                     padding: '5px 7px',
                                     textAlign: 'center',
                                     minWidth: 35,
-                                    background: isCur ? '#FF6B35' : isPast ? '#ffffff12' : '#ffffff06',
-                                    border: `1px solid ${isCur ? '#FF6B35' : isExam ? '#FBBF2428' : '#ffffff0a'}`,
+                                    background: isCur ? '#FF6B35' : isPast ? 'var(--home-border-strong)' : 'var(--home-border-faint)',
+                                    border: `1px solid ${isCur ? '#FF6B35' : isExam ? '#FBBF2428' : 'var(--home-border)'}`,
                                 }}
                             >
-                                <div style={{ fontSize: 10, fontWeight: 800, color: isCur ? '#fff' : isExam ? '#FBBF24' : isPast ? '#888' : '#444' }}>
+                                <div style={{ fontSize: 10, fontWeight: 800, color: isCur ? '#fff' : isExam ? '#FBBF24' : isPast ? 'var(--home-text-dim)' : 'var(--home-text-faint)' }}>
                                     {isExam ? `T${w - STUDY_WEEKS}` : `W${w}`}
                                 </div>
-                                <div style={{ fontSize: 8, color: isCur ? '#fff8' : '#444', marginTop: 1 }}>
+                                <div style={{ fontSize: 8, color: isCur ? '#fff8' : 'var(--home-text-faint)', marginTop: 1 }}>
                                     {isExam ? 'THI' : isCur ? 'NOW' : isPast ? '✓' : '·'}
                                 </div>
                             </div>
@@ -1284,7 +1307,7 @@ function SettingsTab({
                 </div>
             </div>
 
-            <div style={{ textAlign: 'center', fontSize: 11, color: '#333', paddingTop: 4 }}>FPT Time Management Toolkit v3</div>
+            <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--home-text-faint)', paddingTop: 4 }}>FPT Time Management Toolkit v3</div>
         </div>
     );
 }
@@ -1313,7 +1336,7 @@ function ModalShell({
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '13px 16px',
-                        borderBottom: '1px solid #ffffff0f',
+                        borderBottom: '1px solid var(--home-border)',
                     }}
                 >
                     <div style={{ fontWeight: 800, fontSize: 15 }}>{title}</div>
@@ -1322,7 +1345,7 @@ function ModalShell({
                     </button>
                 </div>
                 <div style={{ overflowY: 'auto', flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>{children}</div>
-                {footer && <div style={{ display: 'flex', gap: 8, padding: '11px 16px', borderTop: '1px solid #ffffff0f' }}>{footer}</div>}
+                {footer && <div style={{ display: 'flex', gap: 8, padding: '11px 16px', borderTop: '1px solid var(--home-border)' }}>{footer}</div>}
             </div>
         </div>
     );
@@ -1343,7 +1366,7 @@ function NoteModal({
     onClose: () => void;
     showToast: (msg: string) => void;
 }) {
-    const sub = subjectMap[subjectId] || { color: '#888', name: subjectId, full: '', id: subjectId };
+    const sub = subjectMap[subjectId] || { color: 'var(--home-text-dim)', name: subjectId, full: '', id: subjectId };
     const [text, setText] = useState<string>(notes[subjectId] || '');
     const [saving, setSaving] = useState(false);
 
@@ -1382,7 +1405,7 @@ function NoteModal({
                 </>
             }
         >
-            <div style={{ fontSize: 11, color: '#555' }}>{sub.full}</div>
+            <div style={{ fontSize: 11, color: 'var(--home-text-faint)' }}>{sub.full}</div>
             <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -1479,8 +1502,8 @@ function ExamModal({
                 </>
             }
         >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1a1a32', borderRadius: 10, padding: '10px 12px' }}>
-                <span style={{ fontSize: 12, color: '#999', flex: 1 }}>Nhập lịch thi tự động từ file .ics</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--home-input)', borderRadius: 10, padding: '10px 12px' }}>
+                <span style={{ fontSize: 12, color: 'var(--home-text-dim)', flex: 1 }}>Nhập lịch thi tự động từ file .ics</span>
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -1501,7 +1524,7 @@ function ExamModal({
                 style={{
                     display: 'flex',
                     overflowX: 'auto',
-                    borderBottom: '1px solid #ffffff0f',
+                    borderBottom: '1px solid var(--home-border)',
                     margin: '0 -16px 0',
                     padding: '0 16px',
                 }}
@@ -1519,7 +1542,7 @@ function ExamModal({
                             cursor: 'pointer',
                             fontWeight: 700,
                             fontSize: 13,
-                            color: w === activeW ? '#FBBF24' : '#555',
+                            color: w === activeW ? '#FBBF24' : 'var(--home-text-faint)',
                             borderBottom: w === activeW ? '2px solid #FBBF24' : '2px solid transparent',
                         }}
                     >
@@ -1555,7 +1578,7 @@ function ExamModal({
                             </div>
                         )}
                         {subjectsWithExam.length === 0 && (
-                            <div style={{ textAlign: 'center', color: '#666', fontSize: 12, padding: '16px 0' }}>
+                            <div style={{ textAlign: 'center', color: 'var(--home-text-dim)', fontSize: 12, padding: '16px 0' }}>
                                 Chưa có môn nào thi trong tuần này
                             </div>
                         )}
@@ -1565,7 +1588,7 @@ function ExamModal({
                             return (
                                 <div
                                     key={sub.id}
-                                    style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${sub.color}` }}
+                                    style={{ background: 'var(--home-input)', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${sub.color}` }}
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                                         <div style={{ color: sub.color, fontWeight: 700, flex: 1 }}>{sub.name}</div>
@@ -1680,7 +1703,7 @@ function SubjectsModal({
             }
         >
             {local.map((sub, i) => (
-                <div key={i} style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${sub.color}` }}>
+                <div key={i} style={{ background: 'var(--home-input)', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${sub.color}` }}>
                     <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginBottom: 6 }}>
                         <input
                             value={sub.name}
@@ -1718,8 +1741,8 @@ function SubjectsModal({
                 </div>
             ))}
 
-            <div style={{ background: '#0d0d22', border: '1px dashed #ffffff15', borderRadius: 10, padding: '12px' }}>
-                <div style={{ fontSize: 12, color: '#666', fontWeight: 600, marginBottom: 8 }}>➕ Thêm môn mới</div>
+            <div style={{ background: 'var(--home-card)', border: '1px dashed var(--home-border-strong)', borderRadius: 10, padding: '12px' }}>
+                <div style={{ fontSize: 12, color: 'var(--home-text-dim)', fontWeight: 600, marginBottom: 8 }}>➕ Thêm môn mới</div>
                 <div style={{ display: 'flex', gap: 7, marginBottom: 6 }}>
                     <input
                         value={newName}
@@ -1856,14 +1879,14 @@ function ScheduleModal({
                     </>
                 }
             >
-                <div style={{ fontSize: 12, color: '#999' }}>{selectedSubject.full}</div>
+                <div style={{ fontSize: 12, color: 'var(--home-text-dim)' }}>{selectedSubject.full}</div>
                 {sessions.length === 0 && (
-                    <div style={{ textAlign: 'center', color: '#666', fontSize: 12, padding: '16px 0' }}>Chưa có buổi học nào</div>
+                    <div style={{ textAlign: 'center', color: 'var(--home-text-dim)', fontSize: 12, padding: '16px 0' }}>Chưa có buổi học nào</div>
                 )}
                 {sessions.map((s, i) => (
                     <div
                         key={i}
-                        style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${selectedSubject.color}` }}
+                        style={{ background: 'var(--home-input)', borderRadius: 10, padding: '10px 12px', borderLeft: `3px solid ${selectedSubject.color}` }}
                     >
                         <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                             <input
@@ -1899,7 +1922,7 @@ function ScheduleModal({
                                     </option>
                                 ))}
                             </select>
-                            <label style={{ fontSize: 11, color: '#999', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                            <label style={{ fontSize: 11, color: 'var(--home-text-dim)', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                                 <input
                                     type="checkbox"
                                     checked={s.isOnline}
@@ -1919,8 +1942,8 @@ function ScheduleModal({
 
     return (
         <ModalShell title="🗓 Lịch Học Theo Ngày" onClose={onClose}>
-            <div style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, color: '#999', flex: 1 }}>Nhập lịch học tự động từ file .ics</span>
+            <div style={{ background: 'var(--home-input)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--home-text-dim)', flex: 1 }}>Nhập lịch học tự động từ file .ics</span>
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -1943,7 +1966,7 @@ function ScheduleModal({
                 style={css.input}
             />
             {filteredSubjects.length === 0 && (
-                <div style={{ textAlign: 'center', color: '#666', fontSize: 12, padding: '16px 0' }}>Không tìm thấy môn học nào</div>
+                <div style={{ textAlign: 'center', color: 'var(--home-text-dim)', fontSize: 12, padding: '16px 0' }}>Không tìm thấy môn học nào</div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {filteredSubjects.map((s) => {
@@ -1955,8 +1978,8 @@ function ScheduleModal({
                             onClick={() => openSubject(s.id)}
                         >
                             <div style={{ fontWeight: 800, fontSize: 13, color: s.color }}>{s.name}</div>
-                            <div style={{ fontSize: 10, color: '#555' }}>{s.full}</div>
-                            <div style={{ fontSize: 10, color: count ? '#888' : '#444', marginTop: 6 }}>
+                            <div style={{ fontSize: 10, color: 'var(--home-text-faint)' }}>{s.full}</div>
+                            <div style={{ fontSize: 10, color: count ? 'var(--home-text-dim)' : 'var(--home-text-faint)', marginTop: 6 }}>
                                 {count ? `${count} buổi học` : 'Chưa có buổi học'}
                             </div>
                         </div>
@@ -2039,11 +2062,11 @@ function OnlineModal({
                 </>
             }
         >
-            <div style={{ fontSize: 11, color: '#555' }}>Nhấn vào ngày để bật/tắt Online. Mặc định = Offline.</div>
+            <div style={{ fontSize: 11, color: 'var(--home-text-faint)' }}>Nhấn vào ngày để bật/tắt Online. Mặc định = Offline.</div>
             {Array.from({ length: STUDY_WEEKS }, (_, i) => i + 1).map((w) => {
                 const online = local[w] || [];
                 return (
-                    <div key={w} style={{ background: '#1a1a32', borderRadius: 10, padding: '10px 12px' }}>
+                    <div key={w} style={{ background: 'var(--home-input)', borderRadius: 10, padding: '10px 12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                             <span style={{ fontWeight: 700, fontSize: 13 }}>Tuần {w}</span>
                             <div style={{ display: 'flex', gap: 5 }}>
@@ -2071,8 +2094,8 @@ function OnlineModal({
                                             fontWeight: 700,
                                             fontSize: 11,
                                             lineHeight: 1.4,
-                                            background: on ? '#00C6FF' : '#ffffff08',
-                                            color: on ? '#06061a' : '#555',
+                                            background: on ? '#00C6FF' : 'var(--home-border-faint)',
+                                            color: on ? 'var(--home-bg)' : 'var(--home-text-faint)',
                                         }}
                                     >
                                         <div>{DAY_SHORT[day]}</div>
@@ -2097,9 +2120,9 @@ const globalCss = `
     *, *::before, *::after { box-sizing: border-box; }
     input, select, textarea, button { font-family: inherit; }
     ::-webkit-scrollbar { width: 3px; }
-    ::-webkit-scrollbar-thumb { background: #ffffff18; border-radius: 4px; }
-    input[type="date"]::-webkit-calendar-picker-indicator,
-    input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+    ::-webkit-scrollbar-thumb { background: var(--home-border-strong); border-radius: 4px; }
+    .dark input[type="date"]::-webkit-calendar-picker-indicator,
+    .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
     @keyframes fadeUp   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes slideUp  { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes bellWig  { 0%,100%{transform:rotate(0)} 20%{transform:rotate(18deg)} 40%{transform:rotate(-14deg)} 60%{transform:rotate(9deg)} 80%{transform:rotate(-4deg)} }
@@ -2116,13 +2139,13 @@ const globalCss = `
 // ═══════════════════════════════════════════════════════════════════
 
 const css: Record<string, CSSProperties> = {
-    root: { fontFamily: "'Outfit', 'Segoe UI', sans-serif", background: '#06061a', minHeight: '100vh', color: '#e2e2f0', position: 'relative' },
+    root: { fontFamily: "'Outfit', 'Segoe UI', sans-serif", background: 'var(--home-bg)', minHeight: '100vh', color: 'var(--home-text)', position: 'relative' },
     bgDots: {
         position: 'fixed',
         inset: 0,
         pointerEvents: 'none',
         zIndex: 0,
-        backgroundImage: 'radial-gradient(#ffffff06 1px, transparent 1px)',
+        backgroundImage: 'radial-gradient(var(--home-border-faint) 1px, transparent 1px)',
         backgroundSize: '28px 28px',
     },
     main: { position: 'relative', zIndex: 10, paddingTop: 8, paddingBottom: 36 },
@@ -2136,7 +2159,7 @@ const css: Record<string, CSSProperties> = {
         background: '#FF6B3512',
         border: '1px solid #FF6B3530',
         fontSize: 12,
-        color: '#ccc',
+        color: 'var(--home-text-soft)',
         textAlign: 'center',
     },
     header: {
@@ -2147,12 +2170,12 @@ const css: Record<string, CSSProperties> = {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '11px 18px',
-        background: 'rgba(6,6,26,0.96)',
+        background: 'var(--home-bg-translucent)',
         backdropFilter: 'blur(18px)',
-        borderBottom: '1px solid #ffffff0a',
+        borderBottom: '1px solid var(--home-border)',
     },
     iconBtn: {
-        background: '#ffffff0a',
+        background: 'var(--home-border)',
         borderRadius: 10,
         padding: '7px 10px',
         fontSize: 18,
@@ -2180,12 +2203,12 @@ const css: Record<string, CSSProperties> = {
         top: 'calc(100% + 8px)',
         right: 0,
         width: 284,
-        background: '#0d0d22',
-        border: '1px solid #ffffff12',
+        background: 'var(--home-card)',
+        border: '1px solid var(--home-border-strong)',
         borderRadius: 14,
         zIndex: 300,
         overflow: 'hidden',
-        boxShadow: '0 10px 36px rgba(0,0,0,.65)',
+        boxShadow: '0 10px 36px var(--home-shadow)',
     },
     weekBadge: { textAlign: 'center', background: '#FF6B3512', border: '1px solid #FF6B3528', borderRadius: 10, padding: '4px 13px' },
     nav: {
@@ -2193,9 +2216,9 @@ const css: Record<string, CSSProperties> = {
         top: 58,
         zIndex: 90,
         display: 'flex',
-        background: 'rgba(6,6,26,0.96)',
+        background: 'var(--home-bg-translucent)',
         backdropFilter: 'blur(18px)',
-        borderBottom: '1px solid #ffffff0a',
+        borderBottom: '1px solid var(--home-border)',
     },
     navBtn: {
         flex: 1,
@@ -2233,8 +2256,8 @@ const css: Record<string, CSSProperties> = {
         borderRadius: 2,
     },
     card: {
-        background: '#0d0d22',
-        border: '1px solid #ffffff0a',
+        background: 'var(--home-card)',
+        border: '1px solid var(--home-border)',
         borderRadius: 13,
         padding: '12px 13px',
         display: 'flex',
@@ -2243,9 +2266,9 @@ const css: Record<string, CSSProperties> = {
     },
     cardTitle: { fontWeight: 700, fontSize: 14 },
     input: {
-        background: '#1a1a32',
-        border: '1px solid #ffffff10',
-        color: '#e2e2f0',
+        background: 'var(--home-input)',
+        border: '1px solid var(--home-border)',
+        color: 'var(--home-text)',
         padding: '8px 10px',
         borderRadius: 8,
         fontSize: 12,
@@ -2253,9 +2276,9 @@ const css: Record<string, CSSProperties> = {
         outline: 'none',
     },
     select: {
-        background: '#1a1a32',
-        border: '1px solid #ffffff10',
-        color: '#e2e2f0',
+        background: 'var(--home-input)',
+        border: '1px solid var(--home-border)',
+        color: 'var(--home-text)',
         padding: '8px 10px',
         borderRadius: 8,
         fontSize: 12,
@@ -2278,16 +2301,16 @@ const css: Record<string, CSSProperties> = {
     smallBtn: {
         fontSize: 10,
         background: 'none',
-        border: '1px solid #ffffff10',
-        color: '#888',
+        border: '1px solid var(--home-border)',
+        color: 'var(--home-text-dim)',
         padding: '3px 8px',
         borderRadius: 6,
         cursor: 'pointer',
     },
     chip: {
-        background: '#ffffff0a',
-        border: '1px solid #ffffff10',
-        color: '#888',
+        background: 'var(--home-border)',
+        border: '1px solid var(--home-border)',
+        color: 'var(--home-text-dim)',
         padding: '4px 10px',
         borderRadius: 20,
         fontSize: 10,
@@ -2295,8 +2318,8 @@ const css: Record<string, CSSProperties> = {
         fontWeight: 600,
     },
     arrowBtn: {
-        background: '#ffffff0a',
-        border: '1px solid #ffffff10',
+        background: 'var(--home-border)',
+        border: '1px solid var(--home-border)',
         color: '#fff',
         borderRadius: 8,
         width: 36,
@@ -2321,8 +2344,8 @@ const css: Record<string, CSSProperties> = {
         padding: 10,
     },
     modal: {
-        background: '#0d0d22',
-        border: '1px solid #ffffff10',
+        background: 'var(--home-card)',
+        border: '1px solid var(--home-border)',
         borderRadius: 20,
         width: '100%',
         maxWidth: 460,
@@ -2331,13 +2354,13 @@ const css: Record<string, CSSProperties> = {
         flexDirection: 'column',
         overflow: 'hidden',
     },
-    closeBtn: { background: 'none', border: 'none', color: '#555', fontSize: 18, cursor: 'pointer' },
+    closeBtn: { background: 'none', border: 'none', color: 'var(--home-text-faint)', fontSize: 18, cursor: 'pointer' },
     toast: {
         position: 'fixed',
         bottom: 22,
         left: '50%',
         transform: 'translateX(-50%)',
-        background: '#1a1a32',
+        background: 'var(--home-input)',
         border: '1px solid #FF6B3540',
         color: '#fff',
         padding: '9px 22px',
@@ -2346,7 +2369,7 @@ const css: Record<string, CSSProperties> = {
         fontSize: 13,
         fontWeight: 600,
         whiteSpace: 'nowrap',
-        boxShadow: '0 4px 20px rgba(0,0,0,.6)',
+        boxShadow: '0 4px 20px var(--home-shadow)',
         animation: 'toastIn .22s ease forwards',
     },
 };
