@@ -40,4 +40,9 @@ class Semester extends Model
     {
         return $this->hasMany(Task::class);
     }
+
+    public function dayNotes(): HasMany
+    {
+        return $this->hasMany(DayNote::class);
+    }
 }

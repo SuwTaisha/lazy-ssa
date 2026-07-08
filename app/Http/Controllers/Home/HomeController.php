@@ -28,6 +28,7 @@ class HomeController extends Controller
                 'onlineDays' => $this->demoOnlineDays(),
                 'tasks' => [],
                 'notes' => (object) [],
+                'dayNotes' => (object) [],
                 'examData' => (object) [],
                 'examWeeksCount' => 2,
                 'feedback' => [],
@@ -36,7 +37,7 @@ class HomeController extends Controller
         }
 
         $semester = $this->currentSemesterFor($user);
-        $semester->load(['subjects.scheduleSlots', 'subjects.examEntries', 'subjects.note', 'onlineDays', 'tasks']);
+        $semester->load(['subjects.scheduleSlots', 'subjects.examEntries', 'subjects.note', 'onlineDays', 'tasks', 'dayNotes']);
 
         $subjects = $semester->subjects->map(fn ($s) => [
             'id' => $s->code,
@@ -143,6 +144,11 @@ class HomeController extends Controller
             }
         }
 
+        $dayNotes = [];
+        foreach ($semester->dayNotes as $dayNote) {
+            $dayNotes[$dayNote->date->toDateString()] = $dayNote->content;
+        }
+
         $examData = [];
         $maxExamWeek = null;
         foreach ($semester->subjects as $subject) {
@@ -180,6 +186,7 @@ class HomeController extends Controller
             'onlineDays' => $onlineDays,
             'tasks' => $tasks,
             'notes' => (object) $notes,
+            'dayNotes' => (object) $dayNotes,
             'examData' => (object) $examData,
             'examWeeksCount' => $examWeeksCount,
             'feedback' => $feedback,

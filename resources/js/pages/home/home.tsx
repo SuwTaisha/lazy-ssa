@@ -15,6 +15,7 @@ import {
     BookOpen,
     Calendar,
     CalendarDays,
+    CalendarPlus,
     CalendarRange,
     CheckSquare,
     ChevronLeft,
@@ -101,6 +102,7 @@ interface Task {
 }
 
 type Notes = Record<string, string>; // subjectCode -> note text
+type DayNotes = Record<string, string>; // 'YYYY-MM-DD' -> note text riêng của ngày đó
 
 interface FeedbackItem {
     id: number;
@@ -133,6 +135,7 @@ interface PageProps {
     onlineDays: OnlineDays;
     tasks: Task[];
     notes: Notes;
+    dayNotes: DayNotes;
     examData: ExamData;
     examWeeksCount: number;
     feedback: FeedbackItem[];
@@ -242,6 +245,7 @@ export default function Home() {
         onlineDays,
         tasks,
         notes,
+        dayNotes,
         examData,
         examWeeksCount,
         feedback,
@@ -450,6 +454,7 @@ export default function Home() {
                         onlineDays={onlineDays}
                         examData={examData}
                         notes={notes}
+                        dayNotes={dayNotes}
                         openModal={openModal}
                     />
                 )}
@@ -500,6 +505,17 @@ export default function Home() {
                 />
             )}
             {modal === 'feedback' && <FeedbackModal feedback={feedback} onClose={closeModal} showToast={showToast} />}
+            {modal && modal.startsWith('day:') && semesterId && (
+                <DayActionsModal
+                    dateStr={modal.slice(4)}
+                    subjects={subjects}
+                    scheduleSlotsBySubject={scheduleSlotsBySubject}
+                    dayNotes={dayNotes}
+                    semesterId={semesterId}
+                    onClose={closeModal}
+                    showToast={showToast}
+                />
+            )}
             {modal && modal.startsWith('note:') && semesterId && (
                 <NoteModal
                     subjectId={modal.slice(5)}
@@ -713,6 +729,7 @@ interface ScheduleTabProps {
     onlineDays: OnlineDays;
     examData: ExamData;
     notes: Notes;
+    dayNotes: DayNotes;
     openModal: (id: string) => void;
 }
 
@@ -729,6 +746,7 @@ function ScheduleTab({
     onlineDays,
     examData,
     notes,
+    dayNotes,
     openModal,
 }: ScheduleTabProps) {
     const monday = getWeekMonday(semStart, weekView);
@@ -834,6 +852,69 @@ function ScheduleTab({
                     openModal={openModal}
                 />
             )}
+
+            <ScheduleNotesOverview subjects={subjects} notes={notes} dayNotes={dayNotes} openModal={openModal} />
+        </div>
+    );
+}
+
+function ScheduleNotesOverview({
+    subjects,
+    notes,
+    dayNotes,
+    openModal,
+}: {
+    subjects: Subject[];
+    notes: Notes;
+    dayNotes: DayNotes;
+    openModal: (id: string) => void;
+}) {
+    const dayEntries = Object.entries(dayNotes)
+        .filter(([, v]) => v && v.trim())
+        .sort((a, b) => b[0].localeCompare(a[0]));
+    const subjectEntries = subjects.filter((s) => notes[s.id] && notes[s.id].trim());
+
+    if (dayEntries.length === 0 && subjectEntries.length === 0) return null;
+
+    const rowStyle = (accent: string): React.CSSProperties => ({
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        textAlign: 'left',
+        background: 'var(--home-input)',
+        border: '1px solid var(--home-border)',
+        borderLeft: `3px solid ${accent}`,
+        borderRadius: 8,
+        padding: '8px 10px',
+        cursor: 'pointer',
+    });
+    const snippetStyle: React.CSSProperties = {
+        fontSize: 11,
+        color: 'var(--home-text-soft)',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+    };
+
+    return (
+        <div style={css.card}>
+            <div style={css.cardTitle}>
+                <NotebookPen size={15} strokeWidth={2.4} /> Ghi Chú
+            </div>
+            {dayEntries.map(([date, content]) => (
+                <button key={date} onClick={() => openModal(`day:${date}`)} style={rowStyle('#FF6B35')}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#FF6B35' }}>
+                        <CalendarDays size={11} strokeWidth={2.4} /> {fmtDMY(parseLocalDate(date))}
+                    </div>
+                    <div style={snippetStyle}>{content}</div>
+                </button>
+            ))}
+            {subjectEntries.map((s) => (
+                <button key={s.id} onClick={() => openModal(`note:${s.id}`)} style={rowStyle(s.color)}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: s.color }}>{s.name}</div>
+                    <div style={snippetStyle}>{notes[s.id]}</div>
+                </button>
+            ))}
         </div>
     );
 }
@@ -927,6 +1008,22 @@ function StudyWeek({
                                     </span>
                                 )}
                             </span>
+                            <button
+                                title="Ghi chú / Thêm slot cho ngày này"
+                                onClick={() => openModal(`day:${dateStr}`)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    background: 'var(--home-input)',
+                                    border: '1px solid var(--home-border)',
+                                    color: 'var(--home-text-dim)',
+                                    borderRadius: 6,
+                                    padding: '3px 6px',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <CalendarPlus size={13} strokeWidth={2.2} />
+                            </button>
                         </div>
                         {items.length === 0 && <div style={{ fontSize: 11, color: 'var(--home-text-faint)', fontStyle: 'italic' }}>Không có lịch học</div>}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -1188,6 +1285,7 @@ function CalendarView({
                     const code = (info.event.extendedProps as CalendarEventProps).code;
                     openModal(`note:${code}`);
                 }}
+                dateClick={(info) => openModal(`day:${info.dateStr}`)}
             />
         </div>
     );
@@ -2408,6 +2506,210 @@ function ScheduleModal({
     );
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// DAY ACTIONS MODAL (click 1 ngày trong Lịch/Tuần -> ghi chú hoặc thêm slot)
+// ═══════════════════════════════════════════════════════════════════
+
+function DayActionsModal({
+    dateStr,
+    subjects,
+    scheduleSlotsBySubject,
+    dayNotes,
+    semesterId,
+    onClose,
+    showToast,
+}: {
+    dateStr: string;
+    subjects: Subject[];
+    scheduleSlotsBySubject: ScheduleSlotsBySubject;
+    dayNotes: DayNotes;
+    semesterId?: number;
+    onClose: () => void;
+    showToast: (msg: string) => void;
+}) {
+    const existingNote = dayNotes[dateStr] || '';
+    const [step, setStep] = useState<'choose' | 'note' | 'slot'>(existingNote ? 'note' : 'choose');
+    const [noteText, setNoteText] = useState<string>(existingNote);
+    const [slotSubject, setSlotSubject] = useState<string>(subjects[0]?.id || '');
+    const [slotNumber, setSlotNumber] = useState<number>(1);
+    const [slotOnline, setSlotOnline] = useState<boolean>(false);
+    const [saving, setSaving] = useState(false);
+
+    const dateLabel = parseLocalDate(dateStr).toLocaleDateString('vi-VN', {
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+
+    const saveNote = () => {
+        if (!semesterId) return;
+        if (!noteText.trim()) {
+            showToast('⚠️ Ghi chú không được để trống');
+            return;
+        }
+        setSaving(true);
+        router.put(
+            `/semesters/${semesterId}/day-notes/${dateStr}`,
+            asFormData({ content: noteText.trim() }),
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    showToast('✅ Đã lưu ghi chú!');
+                    onClose();
+                },
+                onError: () => showToast('❌ Không thể lưu ghi chú'),
+                onFinish: () => setSaving(false),
+            },
+        );
+    };
+
+    const saveSlot = () => {
+        if (!semesterId || !slotSubject) return;
+        setSaving(true);
+        const existing = (scheduleSlotsBySubject[slotSubject] || []).map((s) => ({
+            class_date: s.classDate,
+            slot: s.slot,
+            is_online: s.isOnline,
+        }));
+        const already = existing.some((s) => s.class_date === dateStr && s.slot === slotNumber);
+        const slots = already ? existing : [...existing, { class_date: dateStr, slot: slotNumber, is_online: slotOnline }];
+        router.put(`/semesters/${semesterId}/subjects/${slotSubject}/schedule-slots`, asFormData({ slots }), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                showToast(already ? 'ℹ️ Slot này đã tồn tại' : '✅ Đã thêm slot học!');
+                onClose();
+            },
+            onError: () => showToast('❌ Không thể thêm slot học'),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    const backBtn = (
+        <button
+            onClick={() => setStep('choose')}
+            style={{ ...css.chip, display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+        >
+            <ArrowLeft size={12} strokeWidth={2.4} /> Quay lại
+        </button>
+    );
+
+    return (
+        <ModalShell
+            title={
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7, textTransform: 'capitalize' }}>
+                    <CalendarPlus size={16} strokeWidth={2.4} /> {dateLabel}
+                </span>
+            }
+            onClose={onClose}
+            footer={
+                step === 'slot' ? (
+                    <button
+                        style={{ ...css.primaryBtn, flex: 1, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={saveSlot}
+                        disabled={saving || !slotSubject}
+                    >
+                        <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu slot'}
+                    </button>
+                ) : step === 'note' ? (
+                    <button
+                        style={{ ...css.primaryBtn, flex: 1, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={saveNote}
+                        disabled={saving}
+                    >
+                        <Save size={13} strokeWidth={2.4} /> {saving ? 'Đang lưu...' : 'Lưu ghi chú'}
+                    </button>
+                ) : undefined
+            }
+        >
+            {step === 'choose' && (
+                <>
+                    <button
+                        onClick={() => setStep('note')}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            background: 'var(--home-input)',
+                            border: '1px solid var(--home-border)',
+                            borderRadius: 10,
+                            padding: '14px 16px',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                        }}
+                    >
+                        <NotebookPen size={20} strokeWidth={2} color="#FF6B35" />
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--home-text)' }}>Tạo / Xem ghi chú</div>
+                            <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 1 }}>Ghi chú riêng cho ngày này</div>
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setStep('slot')}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            background: 'var(--home-input)',
+                            border: '1px solid var(--home-border)',
+                            borderRadius: 10,
+                            padding: '14px 16px',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                        }}
+                    >
+                        <CalendarPlus size={20} strokeWidth={2} color="#FF6B35" />
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--home-text)' }}>Thêm slot học</div>
+                            <div style={{ fontSize: 11, color: 'var(--home-text-faint)', marginTop: 1 }}>Xếp một môn vào ngày này</div>
+                        </div>
+                    </button>
+                </>
+            )}
+
+            {step === 'note' && (
+                <>
+                    {backBtn}
+                    <textarea
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        placeholder="Ghi chú cho ngày này..."
+                        rows={7}
+                        maxLength={20000}
+                        style={{ ...css.input, resize: 'vertical', lineHeight: 1.6 }}
+                    />
+                </>
+            )}
+
+            {step === 'slot' && (
+                <>
+                    {backBtn}
+                    <select value={slotSubject} onChange={(e) => setSlotSubject(e.target.value)} style={css.select}>
+                        {subjects.map((s) => (
+                            <option key={s.id} value={s.id}>
+                                {s.name} — {s.full}
+                            </option>
+                        ))}
+                    </select>
+                    <select value={slotNumber} onChange={(e) => setSlotNumber(Number(e.target.value))} style={css.select}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                            <option key={n} value={n}>
+                                Slot {n} ({SLOT_TIMES[n][0]}-{SLOT_TIMES[n][1]})
+                            </option>
+                        ))}
+                    </select>
+                    <label style={{ fontSize: 12, color: 'var(--home-text-dim)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input type="checkbox" checked={slotOnline} onChange={(e) => setSlotOnline(e.target.checked)} />
+                        <Globe size={13} strokeWidth={2.4} /> Học online
+                    </label>
+                </>
+            )}
+        </ModalShell>
+    );
+}
+
 function FeedbackModal({
     feedback,
     onClose,
@@ -2846,7 +3148,7 @@ const css: Record<string, CSSProperties> = {
         background: 'rgba(0,0,0,.82)',
         backdropFilter: 'blur(5px)',
         display: 'flex',
-        alignItems: 'flex-end',
+        alignItems: 'center',
         justifyContent: 'center',
         padding: 10,
     },
