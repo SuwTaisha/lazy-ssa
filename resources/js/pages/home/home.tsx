@@ -302,6 +302,7 @@ export default function Home() {
                 },
                 {
                     preserveScroll: true,
+                    preserveState: true,
                     onSuccess: () => showToast('🔔 Đã bật thông báo nhắc deadline!'),
                     onError: () => showToast('❌ Không thể bật thông báo'),
                 }
@@ -981,6 +982,7 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
             { subject: newSub, text: newText.trim(), deadline: newDl || null },
             {
                 preserveScroll: true,
+                preserveState: true,
                 onSuccess: () => {
                     setNewText('');
                     setNewDl('');
@@ -999,6 +1001,7 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
         if (!requireAuth()) return;
         router.delete(`/tasks/${id}`, {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => showToast('🗑 Đã xóa'),
         });
     };
@@ -1226,7 +1229,16 @@ function SettingsTab({
             showToast('🔐 Đăng nhập để chỉnh ngày bắt đầu học kỳ');
             return;
         }
-        router.put(`/semesters/${semesterId}`, { start_date: dateStr }, { preserveScroll: true });
+        router.put(
+            `/semesters/${semesterId}`,
+            { start_date: dateStr },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => showToast('✅ Đã cập nhật ngày bắt đầu học kỳ!'),
+                onError: () => showToast('❌ Không thể cập nhật ngày bắt đầu học kỳ'),
+            },
+        );
     };
 
     return (
@@ -1377,6 +1389,7 @@ function NoteModal({
             { content: text },
             {
                 preserveScroll: true,
+                preserveState: true,
                 onSuccess: () => {
                     showToast('✅ Đã lưu ghi chú!');
                     onClose();
@@ -1457,6 +1470,7 @@ function ExamModal({
         setSaving(true);
         router.put(`/semesters/${semesterId}/exam-entries`, asFormData({ examData: local }), {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
                 showToast('✅ Đã lưu lịch thi!');
                 onClose();
@@ -1471,6 +1485,7 @@ function ExamModal({
         setImporting(true);
         router.post(`/semesters/${semesterId}/exam-entries/import`, form, {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
                 showToast('✅ Đã nhập lịch thi từ file .ics!');
                 onClose();
@@ -1675,6 +1690,7 @@ function SubjectsModal({
         setSaving(true);
         router.put(`/semesters/${semesterId}/subjects`, asFormData({ subjects: local }), {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
                 showToast('✅ Đã lưu môn học!');
                 onClose();
@@ -1803,6 +1819,7 @@ function ScheduleModal({
         setDeletingAll(true);
         router.delete(`/semesters/${semesterId}/schedule-slots`, {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => showToast('🗑 Đã xoá toàn bộ lịch học!'),
             onFinish: () => setDeletingAll(false),
         });
@@ -1825,6 +1842,7 @@ function ScheduleModal({
         const slots = sessions.map((s) => ({ class_date: s.classDate, slot: s.slot, is_online: s.isOnline }));
         router.put(`/semesters/${semesterId}/subjects/${selectedCode}/schedule-slots`, asFormData({ slots }), {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
                 showToast('✅ Đã lưu lịch học!');
                 setSelectedCode(null);
@@ -1840,6 +1858,7 @@ function ScheduleModal({
         setImporting(true);
         router.post(`/semesters/${semesterId}/schedule/import`, form, {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
                 showToast('✅ Đã nhập lịch học từ file .ics!');
                 onClose();
@@ -2035,6 +2054,7 @@ function OnlineModal({
         setSaving(true);
         router.put(`/semesters/${semesterId}/online-days`, asFormData({ onlineDays: local }), {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
                 showToast('✅ Đã lưu lịch Online/Offline!');
                 onClose();
