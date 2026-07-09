@@ -46,11 +46,19 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            // Cố tình KHÔNG có trong $fillable — is_admin không bao giờ được phép gán
+            // hàng loạt từ request, chỉ set trực tiếp qua tinker/seeder.
+            'is_admin' => 'boolean',
         ];
     }
 
     public function semesters(): HasMany
     {
         return $this->hasMany(Semester::class);
+    }
+
+    public function milestoneSurveys(): HasMany
+    {
+        return $this->hasMany(MilestoneSurvey::class);
     }
 }

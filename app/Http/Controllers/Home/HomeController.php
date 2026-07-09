@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Feedback;
 use App\Models\ScheduleSlot;
 use App\Models\Semester;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -14,6 +15,10 @@ use Inertia\Response;
 class HomeController extends Controller
 {
     private const STUDY_WEEKS = 7;
+
+    // Mốc đánh giá bắt buộc (ngày kể từ lúc tạo tài khoản) — xét từ lớn xuống nhỏ để
+    // luôn ưu tiên mốc gần nhất còn thiếu, tránh hỏi dồn nhiều mốc cũ cùng lúc.
+    private const SURVEY_MILESTONES = ['day30' => 30, 'day7' => 7, 'day1' => 1];
 
     public function index(Request $request): Response
     {
@@ -35,6 +40,7 @@ class HomeController extends Controller
                 'feedback' => [],
                 'workShiftTypes' => [],
                 'workShifts' => [],
+                'milestoneSurvey' => null,
                 'isDemo' => true,
             ]);
         }
@@ -221,8 +227,23 @@ class HomeController extends Controller
             'feedback' => $feedback,
             'workShiftTypes' => $workShiftTypes,
             'workShifts' => $workShifts,
+            'milestoneSurvey' => $this->dueMilestone($user),
             'isDemo' => false,
         ]);
+    }
+
+    private function dueMilestone(User $user): ?string
+    {
+        $answered = $user->milestoneSurveys()->pluck('milestone')->all();
+        $daysSinceJoined = $user->created_at->diffInDays(Carbon::now());
+
+        foreach (self::SURVEY_MILESTONES as $milestone => $days) {
+            if ($daysSinceJoined >= $days && ! in_array($milestone, $answered, true)) {
+                return $milestone;
+            }
+        }
+
+        return null;
     }
 
     private function currentSemesterFor($user): Semester

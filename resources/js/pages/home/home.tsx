@@ -128,6 +128,8 @@ interface WorkShiftItem {
     end: string;
 }
 
+type MilestoneKey = 'day1' | 'day7' | 'day30';
+
 interface FeedbackItem {
     id: number;
     rating: number;
@@ -166,6 +168,7 @@ interface PageProps {
     feedback: FeedbackItem[];
     workShiftTypes: WorkShiftTypeItem[];
     workShifts: WorkShiftItem[];
+    milestoneSurvey: MilestoneKey | null;
     isDemo: boolean;
     vapidPublicKey: string | null;
     [key: string]: unknown;
@@ -302,6 +305,7 @@ export default function Home() {
         feedback,
         workShiftTypes,
         workShifts,
+        milestoneSurvey,
         isDemo,
         vapidPublicKey,
     } = usePage<PageProps>().props;
@@ -602,6 +606,8 @@ export default function Home() {
                     {toast}
                 </div>
             )}
+
+            {milestoneSurvey && <MilestoneSurveyModal milestone={milestoneSurvey} showToast={showToast} />}
         </div>
     );
 }
@@ -3823,6 +3829,94 @@ function DayActionsModal({
                 </>
             )}
         </ModalShell>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MILESTONE SURVEY (bắt buộc đánh giá ở mốc 1/7/30 ngày sau khi tạo tài khoản —
+// không có nút đóng/bỏ qua, chặn tương tác với phần còn lại cho tới khi gửi xong)
+// ═══════════════════════════════════════════════════════════════════
+
+const MILESTONE_COPY: Record<MilestoneKey, { title: string; question: string }> = {
+    day1: { title: 'Bạn đã dùng FPT Time được 1 ngày!', question: 'Trải nghiệm ngày đầu tiên của bạn thế nào?' },
+    day7: { title: 'Đã 1 tuần đồng hành cùng FPT Time', question: 'Sau 1 tuần sử dụng, bạn thấy app thế nào?' },
+    day30: { title: 'Cột mốc 1 tháng sử dụng!', question: 'Sau 1 tháng đồng hành, bạn đánh giá FPT Time ra sao?' },
+};
+
+function MilestoneSurveyModal({ milestone, showToast }: { milestone: MilestoneKey; showToast: (msg: string) => void }) {
+    const [rating, setRating] = useState(0);
+    const [feedback, setFeedback] = useState('');
+    const [saving, setSaving] = useState(false);
+    const copy = MILESTONE_COPY[milestone];
+
+    const submit = () => {
+        if (rating < 1) {
+            showToast('⚠️ Vui lòng chọn số sao đánh giá');
+            return;
+        }
+        setSaving(true);
+        router.post(
+            '/milestone-surveys',
+            { milestone, rating, feedback: feedback.trim() || null },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => showToast('✅ Cảm ơn bạn đã đánh giá!'),
+                onError: () => showToast('❌ Không thể gửi đánh giá, thử lại nhé'),
+                onFinish: () => setSaving(false),
+            },
+        );
+    };
+
+    return (
+        <div style={{ ...css.overlay, zIndex: 500 }}>
+            <div style={css.modal} className="anim-slideup">
+                <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--home-border)' }}>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--home-text)' }}>{copy.title}</div>
+                    <div style={{ fontSize: 12, color: 'var(--home-text-faint)', marginTop: 3 }}>
+                        Vui lòng đánh giá để tiếp tục sử dụng — chỉ mất vài giây thôi.
+                    </div>
+                </div>
+                <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ fontSize: 13, color: 'var(--home-text-dim)', textAlign: 'center' }}>{copy.question}</div>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                            <button
+                                key={n}
+                                onClick={() => setRating(n)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: 34,
+                                    lineHeight: 1,
+                                    color: n <= rating ? '#FBBF24' : 'var(--home-border-strong)',
+                                }}
+                            >
+                                ★
+                            </button>
+                        ))}
+                    </div>
+                    <textarea
+                        value={feedback}
+                        onChange={(e) => setFeedback(e.target.value)}
+                        placeholder="Góp ý thêm để tụi mình cải thiện app (không bắt buộc)..."
+                        rows={4}
+                        maxLength={2000}
+                        style={{ ...css.input, resize: 'vertical', lineHeight: 1.6 }}
+                    />
+                </div>
+                <div style={{ padding: '12px 18px', borderTop: '1px solid var(--home-border)' }}>
+                    <button
+                        style={{ ...css.primaryBtn, width: '100%', justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
+                        onClick={submit}
+                        disabled={saving}
+                    >
+                        <Send size={13} strokeWidth={2.4} /> {saving ? 'Đang gửi...' : 'Gửi đánh giá'}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 

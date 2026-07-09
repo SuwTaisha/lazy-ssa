@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\DayNote\DayNoteController;
 use App\Http\Controllers\Examentry\ExamEntryController;
 use App\Http\Controllers\ExamEntry\ExamEntryImportController;
 use App\Http\Controllers\Feedback\FeedbackController;
 use App\Http\Controllers\Guide\GuideController;
 use App\Http\Controllers\Home\HomeController;
+use App\Http\Controllers\MilestoneSurvey\MilestoneSurveyController;
 use App\Http\Controllers\Note\NoteController;
 use App\Http\Controllers\Online\OnlineDayController;
 use App\Http\Controllers\Push\PushSubscriptionController;
@@ -46,6 +48,11 @@ Route::middleware('auth')->group(function () {
     Route::delete('/webpush/subscribe', [PushSubscriptionController::class, 'destroy'])->name('webpush.unsubscribe');
 
     Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
+    Route::post('/milestone-surveys', [MilestoneSurveyController::class, 'store'])->name('milestone-surveys.store');
+});
+
+Route::middleware(['auth', 'admin'])->group(function () {
+    Route::get('/admin/dashboard', [DashboardController::class, 'index'])->name('admin.dashboard');
 });
 
 require __DIR__.'/auth.php';
