@@ -22,7 +22,22 @@ class DashboardController extends Controller
     {
         $totalUsers = User::count();
         $newUsersThisWeek = User::where('created_at', '>=', Carbon::now()->subDays(7))->count();
-        $activeUsers = $this->activeUserIds()->count();
+        $activeIds = $this->activeUserIds();
+        $activeUsers = $activeIds->count();
+
+        $users = User::query()
+            ->select(['id', 'name', 'email', 'is_admin', 'created_at'])
+            ->orderByDesc('created_at')
+            ->paginate(15)
+            ->withQueryString()
+            ->through(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'isAdmin' => (bool) $u->is_admin,
+                'isActive' => $activeIds->contains($u->id),
+                'createdAt' => $u->created_at->toIso8601String(),
+            ]);
 
         $feedbackCount = Feedback::count();
         $feedbackAvgRating = round((float) Feedback::avg('rating'), 2);
@@ -39,6 +54,11 @@ class DashboardController extends Controller
                 'avgRating' => round((float) (clone $query)->avg('rating'), 2),
             ];
         })->values();
+
+        $ratingDistribution = collect(range(1, 5))->map(fn (int $star) => [
+            'rating' => $star,
+            'count' => Feedback::where('rating', $star)->count() + MilestoneSurvey::where('rating', $star)->count(),
+        ])->values();
 
         $recentFeedback = Feedback::with('user:id,name,email')
             ->latest()
@@ -79,8 +99,10 @@ class DashboardController extends Controller
                 'realUsageRate' => $totalUsers > 0 ? round($activeUsers / $totalUsers * 100) : 0,
             ],
             'surveyByMilestone' => $surveyByMilestone,
+            'ratingDistribution' => $ratingDistribution,
             'recentFeedback' => $recentFeedback,
             'recentSurveys' => $recentSurveys,
+            'users' => $users,
         ]);
     }
 
