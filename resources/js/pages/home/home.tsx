@@ -636,15 +636,16 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
 
     return (
         <header style={css.header}>
-            <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                    <span style={{ fontSize: 22, fontWeight: 900, color: '#FF6B35', letterSpacing: -1 }}>FPT</span>
-                    <span style={{ fontSize: 22, fontWeight: 900, color: 'var(--home-text)', letterSpacing: -1 }}>TIME</span>
+            <div style={css.headerInner}>
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                        <span style={{ fontSize: 22, fontWeight: 900, color: '#FF6B35', letterSpacing: -1 }}>FPT</span>
+                        <span style={{ fontSize: 22, fontWeight: 900, color: 'var(--home-text)', letterSpacing: -1 }}>TIME</span>
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--home-text-faint)', letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 1 }}>Management Toolkit</div>
                 </div>
-                <div style={{ fontSize: 9, color: 'var(--home-text-faint)', letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 1 }}>Management Toolkit</div>
-            </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {user ? (
                     <>
                         <button className="flex items-center gap-1.5 rounded-lg border border-[#34D39930] bg-[#34D39912] px-3 py-1.5 text-xs font-bold text-[#34D399]">
@@ -692,6 +693,7 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                 <div style={css.weekBadge}>
                     <div style={{ fontSize: 8, color: '#FF6B3580', letterSpacing: 2, textTransform: 'uppercase' }}>{sublabel}</div>
                     <div style={{ fontSize: 20, fontWeight: 900, color: '#FF6B35', lineHeight: 1.1 }}>{label}</div>
+                </div>
                 </div>
             </div>
         </header>
@@ -772,18 +774,20 @@ function BottomNav({ tab, setTab, pendingCount }: { tab: TabId; setTab: React.Di
     ];
     return (
         <nav style={css.nav}>
-            {items.map((item) => {
-                const active = tab === item.id;
-                const Icon = item.icon;
-                return (
-                    <button key={item.id} style={{ ...css.navBtn, color: active ? '#FF6B35' : 'var(--home-text-faint)' }} onClick={() => setTab(item.id)}>
-                        <Icon size={18} strokeWidth={active ? 2.4 : 2} />
-                        <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>{item.label}</span>
-                        {!!item.badge && item.badge > 0 && <span style={css.navBadge}>{item.badge}</span>}
-                        {active && <div style={css.navLine} />}
-                    </button>
-                );
-            })}
+            <div style={css.navInner}>
+                {items.map((item) => {
+                    const active = tab === item.id;
+                    const Icon = item.icon;
+                    return (
+                        <button key={item.id} style={{ ...css.navBtn, color: active ? '#FF6B35' : 'var(--home-text-faint)' }} onClick={() => setTab(item.id)}>
+                            <Icon size={18} strokeWidth={active ? 2.4 : 2} />
+                            <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>{item.label}</span>
+                            {!!item.badge && item.badge > 0 && <span style={css.navBadge}>{item.badge}</span>}
+                            {active && <div style={css.navLine} />}
+                        </button>
+                    );
+                })}
+            </div>
         </nav>
     );
 }
@@ -871,7 +875,7 @@ function ScheduleTab({
             </div>
 
             {viewMode === 'week' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, width: '100%', maxWidth: 1100, margin: '0 auto' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, width: '100%' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <button style={css.arrowBtn} onClick={() => setWeekView((w) => Math.max(1, w - 1))}>
                             <ChevronLeft size={16} strokeWidth={2.4} />
@@ -1070,7 +1074,7 @@ function ScheduleNotesOverview({
     };
 
     return (
-        <div style={{ ...css.card, maxWidth: 1100, width: '100%', margin: '0 auto' }}>
+        <div style={{ ...css.card, width: '100%' }}>
             <div style={css.cardTitle}>
                 <NotebookPen size={15} strokeWidth={2.4} /> Ghi Chú
             </div>
@@ -1423,7 +1427,7 @@ function ExamWeek({
                     <Pencil size={11} strokeWidth={2.4} /> Sửa
                 </button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
                 {subjects.map((sub) => {
                     const key = `w${weekView}_${sub.id}`;
                     const exam = examData[key];
@@ -2095,7 +2099,7 @@ function NotesTab({ subjects, notes, openModal }: { subjects: Subject[]; notes: 
     return (
         <div style={css.tab} className="anim-fadeup">
             <div style={{ fontSize: 12, color: 'var(--home-text-faint)', marginBottom: 2 }}>Nhấn vào môn để xem hoặc chỉnh sửa ghi chú</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
                 {subjects.map((sub) => {
                     const note = notes[sub.id] || '';
                     return (
@@ -4165,12 +4169,14 @@ const css: Record<string, CSSProperties> = {
         backgroundImage: 'radial-gradient(var(--home-border-faint) 1px, transparent 1px)',
         backgroundSize: '28px 28px',
     },
-    main: { position: 'relative', zIndex: 10, paddingTop: 8, paddingBottom: 36 },
+    main: { position: 'relative', zIndex: 10, paddingTop: 8, paddingBottom: 36, width: '100%', maxWidth: 'var(--home-content-max)', margin: '0 auto' },
     tab: { padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 11 },
     demoBanner: {
         position: 'relative',
         zIndex: 10,
-        margin: '8px 14px 0',
+        margin: '8px auto 0',
+        width: 'calc(100% - 28px)',
+        maxWidth: 'var(--home-content-max)',
         padding: '9px 13px',
         borderRadius: 10,
         background: '#FF6B3512',
@@ -4183,13 +4189,18 @@ const css: Record<string, CSSProperties> = {
         position: 'sticky',
         top: 0,
         zIndex: 100,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '11px 18px',
         background: 'var(--home-bg-translucent)',
         backdropFilter: 'blur(18px)',
         borderBottom: '1px solid var(--home-border)',
+    },
+    headerInner: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: '100%',
+        maxWidth: 'var(--home-content-max)',
+        margin: '0 auto',
+        padding: '11px 18px',
     },
     iconBtn: {
         background: 'var(--home-border)',
@@ -4232,11 +4243,11 @@ const css: Record<string, CSSProperties> = {
         position: 'sticky',
         top: 58,
         zIndex: 90,
-        display: 'flex',
         background: 'var(--home-bg-translucent)',
         backdropFilter: 'blur(18px)',
         borderBottom: '1px solid var(--home-border)',
     },
+    navInner: { display: 'flex', width: '100%', maxWidth: 'var(--home-content-max)', margin: '0 auto' },
     navBtn: {
         flex: 1,
         display: 'flex',

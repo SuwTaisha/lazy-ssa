@@ -124,6 +124,27 @@
     --home-border: rgba(0, 0, 0, 0.12);
     --home-border-strong: rgba(0, 0, 0, 0.22);
     --home-shadow: rgba(30, 34, 60, 0.12);
+
+    /* home.tsx content column width — same value in light/dark, widens on bigger screens */
+    --home-content-max: 760px;
+}
+
+@media (min-width: 1024px) {
+    :root {
+        --home-content-max: 900px;
+    }
+}
+
+@media (min-width: 1440px) {
+    :root {
+        --home-content-max: 1080px;
+    }
+}
+
+@media (min-width: 1920px) {
+    :root {
+        --home-content-max: 1280px;
+    }
 }
 
 .dark {
