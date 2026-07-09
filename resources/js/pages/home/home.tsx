@@ -645,18 +645,22 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                     <div style={{ fontSize: 9, color: 'var(--home-text-faint)', letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 1 }}>Management Toolkit</div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 {user ? (
                     <>
-                        <button className="flex items-center gap-1.5 rounded-lg border border-[#34D39930] bg-[#34D39912] px-3 py-1.5 text-xs font-bold text-[#34D399]">
-                            <User size={13} strokeWidth={2.5} /> {user.name}
+                        <button
+                            title={user.name}
+                            className="flex max-w-[92px] shrink items-center gap-1.5 overflow-hidden rounded-lg border border-[#34D39930] bg-[#34D39912] px-2.5 py-1.5 text-xs font-bold text-[#34D399] sm:max-w-none sm:px-3"
+                        >
+                            <User size={13} strokeWidth={2.5} className="shrink-0" />
+                            <span className="min-w-0 truncate">{user.name}</span>
                         </button>
                         <Link
                             href="/logout"
                             method="post"
                             as="button"
                             title="Đăng xuất"
-                            className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/20 active:scale-95"
+                            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/20 active:scale-95"
                         >
                             <LogOut size={14} strokeWidth={2.5} />
                         </Link>
@@ -664,7 +668,7 @@ function Header({ currentWeek, urgentCount, bellAnim, bellOpen, setBellOpen, pen
                 ) : (
                     <Link
                         href="/login"
-                        className="flex items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-500 hover:bg-orange-500/20 active:scale-95"
+                        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-500 hover:bg-orange-500/20 active:scale-95"
                     >
                         <LogIn size={13} strokeWidth={2.5} /> Đăng nhập
                     </Link>
@@ -4197,6 +4201,8 @@ const css: Record<string, CSSProperties> = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        rowGap: 8,
         width: '100%',
         maxWidth: 'var(--home-content-max)',
         margin: '0 auto',
@@ -4212,6 +4218,7 @@ const css: Record<string, CSSProperties> = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        flexShrink: 0,
     },
     bellBadge: {
         position: 'absolute',
@@ -4238,7 +4245,7 @@ const css: Record<string, CSSProperties> = {
         overflow: 'hidden',
         boxShadow: '0 10px 36px var(--home-shadow)',
     },
-    weekBadge: { textAlign: 'center', background: '#FF6B3512', border: '1px solid #FF6B3528', borderRadius: 10, padding: '4px 13px' },
+    weekBadge: { textAlign: 'center', background: '#FF6B3512', border: '1px solid #FF6B3528', borderRadius: 10, padding: '4px 13px', flexShrink: 0 },
     nav: {
         position: 'sticky',
         top: 58,
