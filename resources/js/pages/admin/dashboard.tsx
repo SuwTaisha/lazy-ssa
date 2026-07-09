@@ -68,6 +68,9 @@ interface PaginatedUsers {
     total: number;
 }
 
+const HOVER_CARD =
+    'transition-all duration-150 hover:-translate-y-0.5 hover:border-[#FF6B3560] hover:shadow-md dark:hover:border-[#FF6B3560]';
+
 const MILESTONE_LABELS: Record<string, string> = {
     day1: '1 ngày',
     day7: '7 ngày',
@@ -103,7 +106,7 @@ function Stars({ value }: { value: number }) {
 
 function StatCard({ label, value, sub, icon: Icon }: { label: string; value: string | number; sub?: string; icon: React.ElementType }) {
     return (
-        <div className="rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414]">
+        <div className={`rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414] ${HOVER_CARD}`}>
             <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-semibold tracking-wide text-[#8a8478] uppercase">{label}</span>
                 <Icon size={15} style={{ color: ACCENT }} />
@@ -126,9 +129,9 @@ function PieChart({ data, size = 140 }: { data: { label: string; value: number; 
     const background = total > 0 ? `conic-gradient(${stops.join(', ')})` : '#19140012';
 
     return (
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
             <div className="shrink-0 rounded-full" style={{ width: size, height: size, background }} />
-            <ul className="flex flex-1 flex-col gap-1.5 text-sm">
+            <ul className="flex w-full flex-col gap-1.5 text-sm sm:flex-1">
                 {data.map((d) => {
                     const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
                     return (
@@ -191,7 +194,10 @@ function StatsSection({
                 <h2 className="mb-3 text-sm font-bold tracking-wide text-[#8a8478] uppercase">Đánh giá theo mốc thời gian</h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     {surveyByMilestone.map((m) => (
-                        <div key={m.milestone} className="rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414]">
+                        <div
+                            key={m.milestone}
+                            className={`rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414] ${HOVER_CARD}`}
+                        >
                             <div className="flex items-center justify-between">
                                 <span className="font-bold">Mốc {MILESTONE_LABELS[m.milestone]}</span>
                                 <span className="font-mono text-xs text-[#8a8478]">{m.count} lượt</span>
@@ -213,7 +219,7 @@ function StatsSection({
             <div className="mt-8">
                 <h2 className="mb-3 text-sm font-bold tracking-wide text-[#8a8478] uppercase">Biểu đồ tròn</h2>
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                    <div className="rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414]">
+                    <div className={`rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414] ${HOVER_CARD}`}>
                         <div className="mb-3 text-sm font-semibold">Tỉ lệ dùng thật</div>
                         <PieChart
                             data={[
@@ -223,7 +229,7 @@ function StatsSection({
                         />
                     </div>
 
-                    <div className="rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414]">
+                    <div className={`rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414] ${HOVER_CARD}`}>
                         <div className="mb-3 text-sm font-semibold">Phân bố đánh giá theo mốc</div>
                         <PieChart
                             data={surveyByMilestone.map((m) => ({
@@ -234,7 +240,7 @@ function StatsSection({
                         />
                     </div>
 
-                    <div className="rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414]">
+                    <div className={`rounded-xl border border-[#19140018] bg-white p-4 dark:border-[#3E3E3A] dark:bg-[#141414] ${HOVER_CARD}`}>
                         <div className="mb-3 text-sm font-semibold">Phân bố số sao đánh giá</div>
                         <PieChart
                             data={ratingDistribution.map((r) => ({
@@ -276,7 +282,10 @@ function UsersSection({ users }: { users: PaginatedUsers }) {
                             </tr>
                         )}
                         {users.data.map((u) => (
-                            <tr key={u.id} className="border-b border-[#19140012] last:border-b-0 dark:border-[#3E3E3A66]">
+                            <tr
+                                key={u.id}
+                                className="border-b border-[#19140012] transition-colors last:border-b-0 hover:bg-[#19140006] dark:border-[#3E3E3A66] dark:hover:bg-[#EDEDEC08]"
+                            >
                                 <td className="px-4 py-2 font-medium whitespace-nowrap">{u.name}</td>
                                 <td className="px-4 py-2 text-[#4a453f] dark:text-[#b8b2a6]">{u.email}</td>
                                 <td className="px-4 py-2">
@@ -365,7 +374,10 @@ function FeedbackSection({ recentFeedback, recentSurveys }: { recentFeedback: Re
                                 </tr>
                             )}
                             {recentFeedback.map((f) => (
-                                <tr key={f.id} className="border-b border-[#19140012] last:border-b-0 dark:border-[#3E3E3A66]">
+                                <tr
+                                    key={f.id}
+                                    className="border-b border-[#19140012] transition-colors last:border-b-0 hover:bg-[#19140006] dark:border-[#3E3E3A66] dark:hover:bg-[#EDEDEC08]"
+                                >
                                     <td className="px-4 py-2 font-medium whitespace-nowrap">{f.userName}</td>
                                     <td className="px-4 py-2">
                                         <Stars value={f.rating} />
@@ -401,7 +413,10 @@ function FeedbackSection({ recentFeedback, recentSurveys }: { recentFeedback: Re
                                 </tr>
                             )}
                             {recentSurveys.map((s) => (
-                                <tr key={s.id} className="border-b border-[#19140012] last:border-b-0 dark:border-[#3E3E3A66]">
+                                <tr
+                                    key={s.id}
+                                    className="border-b border-[#19140012] transition-colors last:border-b-0 hover:bg-[#19140006] dark:border-[#3E3E3A66] dark:hover:bg-[#EDEDEC08]"
+                                >
                                     <td className="px-4 py-2 font-medium whitespace-nowrap">{s.userName}</td>
                                     <td className="px-4 py-2 whitespace-nowrap">{MILESTONE_LABELS[s.milestone]}</td>
                                     <td className="px-4 py-2">
@@ -441,17 +456,26 @@ export default function AdminDashboard({
     return (
         <>
             <Head title="Admin Dashboard" />
-            <div className="flex min-h-screen bg-[#FDFDFC] text-[#1b1b18] dark:bg-[#0a0a0a] dark:text-[#EDEDEC]">
-                <aside className="flex w-56 shrink-0 flex-col border-r border-[#19140018] px-4 py-6 dark:border-[#3E3E3A]">
-                    <div className="mb-8 flex items-baseline gap-1 px-2">
-                        <span className="text-lg font-black tracking-tight" style={{ color: ACCENT }}>
-                            FPT
-                        </span>
-                        <span className="text-lg font-black tracking-tight">TIME</span>
-                        <span className="ml-2 text-sm font-semibold text-[#8a8478]">Admin</span>
+            <div className="flex min-h-screen flex-col bg-[#FDFDFC] text-[#1b1b18] sm:flex-row dark:bg-[#0a0a0a] dark:text-[#EDEDEC]">
+                <aside className="flex w-full shrink-0 flex-col border-b border-[#19140018] px-4 py-4 sm:w-56 sm:border-r sm:border-b-0 sm:py-6 dark:border-[#3E3E3A]">
+                    <div className="mb-3 flex items-center justify-between px-2 sm:mb-8 sm:block">
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-lg font-black tracking-tight" style={{ color: ACCENT }}>
+                                FPT
+                            </span>
+                            <span className="text-lg font-black tracking-tight">TIME</span>
+                            <span className="ml-2 text-sm font-semibold text-[#8a8478]">Admin</span>
+                        </div>
+
+                        <Link
+                            href={route('home')}
+                            className="inline-flex items-center gap-1 rounded-lg border border-[#19140030] px-2 py-1 text-xs font-medium hover:border-[#19140060] sm:hidden dark:border-[#3E3E3A] dark:hover:border-[#62605b]"
+                        >
+                            <ArrowLeft size={13} /> Quay lại
+                        </Link>
                     </div>
 
-                    <nav className="flex flex-col gap-1">
+                    <nav className="flex gap-1 overflow-x-auto sm:flex-col">
                         {NAV_ITEMS.map((item) => {
                             const ItemIcon = item.icon;
                             const active = section === item.key;
@@ -460,7 +484,7 @@ export default function AdminDashboard({
                                     key={item.key}
                                     type="button"
                                     onClick={() => setSection(item.key)}
-                                    className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+                                    className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition-colors ${
                                         active
                                             ? 'bg-[#FF6B3518] text-[#FF6B35]'
                                             : 'text-[#4a453f] hover:bg-[#19140008] dark:text-[#b8b2a6] dark:hover:bg-[#EDEDEC08]'
@@ -475,13 +499,13 @@ export default function AdminDashboard({
 
                     <Link
                         href={route('home')}
-                        className="mt-auto flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-[#8a8478] hover:text-[#1b1b18] dark:hover:text-[#EDEDEC]"
+                        className="mt-auto hidden items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-[#8a8478] transition-colors hover:bg-[#19140008] hover:text-[#1b1b18] sm:flex dark:hover:bg-[#EDEDEC08] dark:hover:text-[#EDEDEC]"
                     >
                         <ArrowLeft size={15} /> Quay lại ứng dụng
                     </Link>
                 </aside>
 
-                <div className="flex-1 px-8 py-10">
+                <div className="flex-1 px-4 py-6 sm:px-8 sm:py-10">
                     <div className="mx-auto max-w-5xl">
                         {section === 'stats' && (
                             <StatsSection stats={stats} surveyByMilestone={surveyByMilestone} ratingDistribution={ratingDistribution} />
