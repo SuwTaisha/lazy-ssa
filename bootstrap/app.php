@@ -28,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (Schedule $schedule) {
-        $schedule->command(SendTaskDeadlineReminders::class)->everyFifteenMinutes();
+        $schedule->command(SendTaskDeadlineReminders::class)
+            ->everyFifteenMinutes()
+            ->appendOutputTo(storage_path('logs/schedule.log'));
     })
     ->create();
