@@ -27,3 +27,11 @@ createInertiaApp({
 
 // This will set light / dark mode on load...
 initializeTheme();
+
+// Đăng ký service worker ngay khi tải trang (không chờ user bật push notification)
+// để trình duyệt coi app là installable (PWA) và có thể "Thêm vào màn hình chính".
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+}

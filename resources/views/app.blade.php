@@ -10,6 +10,13 @@
         <link rel="alternate icon" href="/favicon.ico">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
+        <link rel="manifest" href="/manifest.json">
+        <meta name="theme-color" content="#FF6B35">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="FPT Time">
+
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=be-vietnam-pro:400,500,600,700,800" rel="stylesheet" />
 
