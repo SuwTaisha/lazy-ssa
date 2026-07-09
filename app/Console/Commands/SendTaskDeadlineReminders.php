@@ -21,11 +21,14 @@ class SendTaskDeadlineReminders extends Command
         // quá hạn nhắc (vd scheduler không chạy kịp), tránh bỏ sót vĩnh viễn —
         // whereNull('reminder_sent_at') đảm bảo mỗi task chỉ được nhắc đúng 1 lần.
         // remind_minutes_before = null nghĩa là task đó không muốn được nhắc.
+        // Dùng now() của PHP (theo config('app.timezone')) thay vì NOW() của MySQL, vì
+        // đồng hồ hệ điều hành của DB server có thể ở múi giờ khác — bind thẳng giá trị
+        // để tránh lệch giờ giữa 2 tầng.
         $tasks = Task::where('done', false)
             ->whereNotNull('deadline')
             ->whereNotNull('remind_minutes_before')
             ->whereNull('reminder_sent_at')
-            ->whereRaw('deadline <= DATE_ADD(NOW(), INTERVAL remind_minutes_before MINUTE)')
+            ->whereRaw('deadline <= DATE_ADD(?, INTERVAL remind_minutes_before MINUTE)', [Carbon::now()])
             ->with('semester.user')
             ->get();
 

@@ -3796,7 +3796,15 @@ function DayActionsModal({
                         placeholder="Mô tả nhiệm vụ..."
                         style={css.input}
                     />
-                    <input type="datetime-local" value={taskDeadline} onChange={(e) => setTaskDeadline(e.target.value)} style={css.input} />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--home-text-dim)' }}>
+                        <Clock size={12} strokeWidth={2.4} /> Giờ deadline ({dateLabel})
+                        <input
+                            type="time"
+                            value={taskDeadline.slice(11, 16)}
+                            onChange={(e) => setTaskDeadline(`${dateStr}T${e.target.value}`)}
+                            style={{ ...css.input, flex: 1 }}
+                        />
+                    </label>
                     {taskDeadline && (
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--home-text-dim)' }}>
                             <Bell size={12} strokeWidth={2.4} /> Nhắc deadline
