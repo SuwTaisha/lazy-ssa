@@ -2204,6 +2204,7 @@ function SettingsTab({
                     [
                         { icon: BookOpen, label: 'Quản lý môn học', sub: 'Thêm, sửa, xóa, đổi màu môn', id: 'subjects' },
                         { icon: CalendarDays, label: 'Lịch học theo ngày', sub: 'Chỉnh slot môn cho từng thứ', id: 'schedule' },
+                        { icon: Target, label: 'Thêm Lịch thi', sub: 'Nhập từ file .ics hoặc tự thêm từng môn', id: 'exam' },
                         { icon: Briefcase, label: 'Ca làm cố định', sub: 'Quản lý ca làm, thêm ca theo ngày', id: 'workshifts' },
                         { icon: MessageCircle, label: 'Gửi phản hồi', sub: 'Góp ý, báo lỗi cho ứng dụng', id: 'feedback' },
                         {
