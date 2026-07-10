@@ -33,8 +33,26 @@ class NewPasswordController extends Controller
     }
 
     /**
-     * Xác thực OTP rồi đặt mật khẩu mới — thay cho Password::reset() (dựa vào token
-     * trong URL), vì luồng này dùng mã OTP người dùng tự nhập.
+     * Bước 1: chỉ xác thực mã OTP, chưa đổi mật khẩu — để frontend chặn người dùng
+     * sang bước nhập mật khẩu mới khi OTP còn sai/hết hạn.
+     *
+     * @throws ValidationException
+     */
+    public function verifyOtp(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'otp' => 'required|digits:6',
+        ]);
+
+        $this->assertOtpValid($request->string('email'), $request->string('otp'));
+
+        return back();
+    }
+
+    /**
+     * Bước 2: xác thực lại OTP (không tin tưởng riêng bước 1 ở client — request thẳng
+     * vào đây vẫn phải qua kiểm tra) rồi mới đặt mật khẩu mới.
      *
      * @throws ValidationException
      */
@@ -46,17 +64,7 @@ class NewPasswordController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        $record = DB::table('password_reset_tokens')->where('email', $request->email)->first();
-
-        $valid = $record
-            && Hash::check($request->otp, $record->token)
-            && now()->lessThan(Carbon::parse($record->created_at)->addMinutes(self::OTP_EXPIRE_MINUTES));
-
-        if (! $valid) {
-            throw ValidationException::withMessages([
-                'otp' => 'Mã OTP không đúng hoặc đã hết hạn.',
-            ]);
-        }
+        $this->assertOtpValid($request->string('email'), $request->string('otp'));
 
         $user = User::where('email', $request->email)->first();
 
@@ -76,5 +84,23 @@ class NewPasswordController extends Controller
         event(new PasswordReset($user));
 
         return to_route('login')->with('status', 'Đặt lại mật khẩu thành công! Đăng nhập lại nhé.');
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    private function assertOtpValid(string $email, string $otp): void
+    {
+        $record = DB::table('password_reset_tokens')->where('email', $email)->first();
+
+        $valid = $record
+            && Hash::check($otp, $record->token)
+            && now()->lessThan(Carbon::parse($record->created_at)->addMinutes(self::OTP_EXPIRE_MINUTES));
+
+        if (! $valid) {
+            throw ValidationException::withMessages([
+                'otp' => 'Mã OTP không đúng hoặc đã hết hạn.',
+            ]);
+        }
     }
 }
