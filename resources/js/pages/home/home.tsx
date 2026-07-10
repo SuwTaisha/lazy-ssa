@@ -443,8 +443,8 @@ export default function Home() {
     // Chặn mọi hành động ghi khi là demo (chưa đăng nhập) -> đẩy sang trang login
     const requireAuth = (): boolean => {
         if (isDemo) {
-            showToast('🔐 Đăng nhập để lưu thay đổi của bạn');
-            router.visit('/login');
+            showToast('🔐 Đăng ký để lưu thay đổi của bạn');
+            router.visit('/register');
             return false;
         }
         return true;
