@@ -46,6 +46,9 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'vapidPublicKey' => config('webpush.vapid.public_key'),
+            'flash' => [
+                'toast' => fn () => $request->session()->get('toast'),
+            ],
         ]);
     }
 }

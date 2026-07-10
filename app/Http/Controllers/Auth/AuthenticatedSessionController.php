@@ -32,6 +32,7 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+        $request->session()->flash('toast', '👋 Chào mừng trở lại!');
 
         return redirect()->intended(route('home', absolute: false));
     }
@@ -45,6 +46,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+        $request->session()->flash('toast', '👋 Đã đăng xuất thành công');
 
         return redirect('/');
     }

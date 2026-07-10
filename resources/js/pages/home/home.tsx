@@ -171,6 +171,7 @@ interface PageProps {
     milestoneSurvey: MilestoneKey | null;
     isDemo: boolean;
     vapidPublicKey: string | null;
+    flash: { toast?: string | null };
     [key: string]: unknown;
 }
 
@@ -308,6 +309,7 @@ export default function Home() {
         milestoneSurvey,
         isDemo,
         vapidPublicKey,
+        flash,
     } = usePage<PageProps>().props;
     const user = auth.user;
     const totalWeeks = STUDY_WEEKS + examWeeksCount;
@@ -377,6 +379,13 @@ export default function Home() {
         setToast(msg);
         setTimeout(() => setToast(null), 2800);
     };
+
+    // Thông báo flash từ backend (đăng nhập/đăng ký/đăng xuất...) chỉ tồn tại đúng 1 lần
+    // cho request kế tiếp sau redirect — hiện luôn khi có, không phụ thuộc gì khác.
+    useEffect(() => {
+        if (flash?.toast) showToast(flash.toast);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [flash?.toast]);
 
     // Chỉ gợi ý bật thông báo cho user thật (không phải demo), khi trình duyệt hỗ trợ
     // Push, chưa từng được cấp/từ chối quyền, và chưa bị người dùng đóng banner trước đó.
@@ -1894,9 +1903,17 @@ function TasksTab({ tasks, subjects, subjectMap, showToast, requireAuth, isDemo 
         );
     };
 
-    const toggleTask = (id: number) => {
+    const toggleTask = (id: number, currentlyDone: boolean) => {
         if (!requireAuth()) return;
-        router.patch(`/tasks/${id}/toggle`, {}, { preserveScroll: true, preserveState: true });
+        router.patch(
+            `/tasks/${id}/toggle`,
+            {},
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => showToast(currentlyDone ? '↩️ Đã bỏ đánh dấu hoàn thành' : '✅ Đã hoàn thành task!'),
+            },
+        );
     };
 
     const deleteTask = (id: number) => {
@@ -2024,7 +2041,7 @@ function TaskRow({
 }: {
     task: Task;
     subjectMap: Record<string, Subject>;
-    onToggle: (id: number) => void;
+    onToggle: (id: number, currentlyDone: boolean) => void;
     onDelete: (id: number) => void;
     overdue: boolean;
 }) {
@@ -2045,7 +2062,7 @@ function TaskRow({
         >
             <button
                 style={{ background: 'none', border: 'none', color: task.done ? '#34D399' : 'var(--home-text-faint)', cursor: 'pointer', flexShrink: 0, display: 'flex' }}
-                onClick={() => onToggle(task.id)}
+                onClick={() => onToggle(task.id, task.done)}
             >
                 {task.done ? <CheckSquare size={19} strokeWidth={2} /> : <Square size={19} strokeWidth={2} />}
             </button>
