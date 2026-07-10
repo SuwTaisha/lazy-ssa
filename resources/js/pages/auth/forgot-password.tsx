@@ -87,7 +87,7 @@ export default function ForgotPassword({ status }: ForgotPasswordProps) {
 
           <h1 className="mt-2 text-xl font-extrabold text-white">Quên mật khẩu</h1>
           <p className="mt-1 text-[12px] leading-relaxed text-white/40">
-            Nhập email đã đăng ký, chúng tôi sẽ gửi cho bạn liên kết đặt lại mật khẩu.
+            Nhập email đã đăng ký, chúng tôi sẽ gửi cho bạn mã OTP để đặt lại mật khẩu.
           </p>
 
           {status && (
@@ -121,7 +121,7 @@ export default function ForgotPassword({ status }: ForgotPasswordProps) {
               disabled={processing}
               className="mt-1 flex items-center justify-center gap-2 rounded-lg bg-[#FF6B35] px-4 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[#ff7d4d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {processing ? "Đang gửi..." : "Gửi liên kết đặt lại"}
+              {processing ? "Đang gửi..." : "Gửi mã OTP"}
             </button>
           </form>
 
