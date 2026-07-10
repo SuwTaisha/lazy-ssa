@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\DayNote\DayNoteController;
-use App\Http\Controllers\Examentry\ExamEntryController;
+use App\Http\Controllers\ExamEntry\ExamEntryController;
 use App\Http\Controllers\ExamEntry\ExamEntryImportController;
 use App\Http\Controllers\Feedback\FeedbackController;
 use App\Http\Controllers\Guide\GuideController;
